@@ -5,15 +5,12 @@ defmodule Medusa.Adapter do
   The objective of having this adapter is to be able to switch them if
   you have specific requirements, such as: using Redis, RabbitMQ, AQMP.
 
-  By default Medusa leverages Erlang's `:ets` module to build an in-memory
-  database.
+  By default Medusa leverages Erlang's `:queue` module for each type of
+  event.
 
   """
 
-  @callback handle_configuration(config :: map) :: map
-  @callback insert(type :: String.t, payload :: %Medusa.Event{}) :: {:ok, %Medusa.Event{}} | {:error, String.t}
-  @callback insert!(type :: String.t, payload :: %Medusa.Event{}) :: :ok | no_return()
-  @callback next(type :: String.t) :: {:ok, %Medusa.Event{}} | {:error, String.t}
-  @callback next!(type :: String.t) :: :ok | no_return()
-  
+  @callback insert(type :: String.t, payload :: any) :: :ok | :error
+  @callback next(type :: String.t) :: [] | [any]
+
 end
