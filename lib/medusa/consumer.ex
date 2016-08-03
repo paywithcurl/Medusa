@@ -16,9 +16,14 @@ defmodule Medusa.Consumer do
   Process the event passing the argument to the function.
   """
   def handle_events(event, _from, state) do
-    Logger.debug "Handling event: #{inspect event}"
-    result = state.(event)
-    Logger.debug "Result of computation: #{result}"
+    Logger.debug "Received event: #{inspect event}"
+    event = List.flatten(event)
+    unless (event |> Enum.empty?) do
+      Enum.each(event,
+        fn e -> result = state.(e)
+        Logger.debug "Result of computation: #{result}"
+      end)
+    end
     # We are a consumer, so we never emit events.
     {:noreply, [], state}
   end

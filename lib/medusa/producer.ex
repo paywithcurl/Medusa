@@ -6,10 +6,10 @@ defmodule Medusa.Producer do
   @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
 
   def start_link({:name, regex}) do
-    Logger.debug "Starting Producer for: #{inspect regex}"
-    name = Medusa.Broker.base64_encode_regex(regex) |> String.to_atom
+    name = Medusa.Broker.base64_encode_regex(regex)
+    Logger.debug "Starting Producer #{inspect name} for: #{inspect regex}"
 
-    GenStage.start_link __MODULE__, %{id: regex, demand: 0}, name: name
+    GenStage.start_link __MODULE__, %{id: name, demand: 0}, name: String.to_atom(name)
   end
 
   def init(state) do
@@ -27,8 +27,10 @@ defmodule Medusa.Producer do
   end
 
   defp get_next(state) do
+    Logger.debug "#{inspect __MODULE__}: #{inspect state}"
     if state.demand > 0 do
-      event = @adapter.next state.id
+      event = @adapter.next(state.id)
+      Logger.debug "#{inspect __MODULE__}: event #{inspect event}"
       d = state.demand
       {:noreply, [event], %{state | demand: d - 1}}
     else {:noreply, [], state} end

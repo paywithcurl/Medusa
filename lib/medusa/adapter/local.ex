@@ -25,8 +25,10 @@ defmodule Medusa.Adapter.Local do
     case Map.get(state, type) do
       :nil -> {:reply, [], state}
       q ->
-        {{:value, i}, q} = :queue.out q
-        {:ok, [i], Map.put(state, type, q)}
+        case :queue.out q do
+          {{:value, i}, q} -> {:reply, i, Map.put(state, type, q)}
+          {:empty, q} -> {:reply, [], Map.put(state, type, q)}
+        end
     end
   end
 

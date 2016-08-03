@@ -1,1 +1,2 @@
+Medusa.start "", ""
 ExUnit.start()

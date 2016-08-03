@@ -62,5 +62,4 @@ defmodule Medusa do
       end
     end
   end
-
 end
