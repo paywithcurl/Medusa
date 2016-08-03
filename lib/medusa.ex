@@ -79,8 +79,8 @@ defmodule Medusa do
           Medusa.Supervisors.Consumers.start_child(unquote(function), unquote(event))
         {:error, {:already_started, _pid}} ->
           Medusa.Supervisors.Consumers.start_child(unquote(function), unquote(event))
-        bleh ->
-          raise "Shit happened! #{bleh}"
+        what ->
+          raise "What happened? #{what}"
       end
     end
   end
