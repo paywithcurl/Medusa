@@ -4,6 +4,7 @@ defmodule ExternalIntegrationTest do
 
   test "Add consumers" do
     assert {:ok, _pid} = Medusa.consume ~r/^foo\.bar$/, IO, :inspect
+    assert {:ok, _pid} = Medusa.consume ~r/^foo\.bar$/, IO, :inspect
     assert {:ok, _pid} = Medusa.consume ~r/^foo\.biz$/, IO, :inspect
     assert {:ok, _pid} = Medusa.consume ~r/^foo\.*/, IO, :inspect
     assert {:ok, _pid} = Medusa.consume ~r/^foo\.beeb$/, IO, :inspect
@@ -12,12 +13,12 @@ defmodule ExternalIntegrationTest do
   end
 
   test "Send events" do
-    Medusa.Broker.publish "foo.bar", 90
-    Medusa.Broker.publish "foo.buh", 100
-    Medusa.Broker.publish "foo.beeb", 60
-    Medusa.Broker.publish "foo.biz", 1000
-    Medusa.Broker.publish "foo.beeb", 76
-    Medusa.Broker.publish "foo.biz", 1542
+    Medusa.publish "foo.bar", 90
+    Medusa.publish "foo.buh", 100
+    Medusa.publish "foo.beeb", 60
+    Medusa.publish "foo.biz", 1000
+    Medusa.publish "foo.beeb", 76
+    Medusa.publish "foo.biz", 1542
   end
   
 end

@@ -2,6 +2,29 @@ defmodule Medusa do
   use Application
   require Logger
 
+  @moduledoc """
+  Medusa is a Pub/Sub system that leverages GenStage.
+
+  You should declare routes using `Regex` module, like
+  the following examples:
+
+  ```
+  Medusa.consume ~r/^foo\.bar$/, Foo, :beep   # Matches only "foo.bar" events.
+  Medusa.consume ~r/^foo\.*/, Foo, :boop      # Matches all "foo. ..." events.
+  ```
+
+  Then, to publish something, you call:
+
+  ```
+  Medusa.publish "foo.bar", my_awesome_payload
+  ```
+
+  ## Caveats
+
+  It can only consume functions of arity 1.
+
+  """
+
   @misconfiguration_error """
     Oops... looks like Medusa is not configured.
     Please, check if you have a line like this in your configuration:
@@ -61,5 +84,9 @@ defmodule Medusa do
           raise "Shit happened! #{bleh}"
       end
     end
+  end
+
+  def publish(route, payload) do
+    Medusa.Broker.publish route, payload
   end
 end
