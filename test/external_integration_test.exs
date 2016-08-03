@@ -2,23 +2,25 @@ defmodule ExternalIntegrationTest do
   use ExUnit.Case
   require Medusa
 
-  test "Add consumers" do
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.bar$/, IO, :inspect
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.bar$/, IO, :inspect
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.biz$/, IO, :inspect
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.*/, IO, :inspect
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.beeb$/, IO, :inspect
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.piip$/, IO, :inspect
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.buh$/, IO, :inspect
+  setup do
+    fc = fn x -> send(:test, {:hey, "You sent me", x}) end
+    [fc: fc]
   end
 
-  test "Send events" do
+  test "Add consumers", ctx do
+    assert {:ok, _pid} = Medusa.consume ~r/^foo\.bob$/, ctx[:fc]
+  end
+
+  test "Send events", ctx do
+    Process.register self, :test
+    Medusa.consume ~r/^foo\.bar$/, ctx[:fc]
+    Medusa.consume ~r/^foo\.*/, ctx[:fc]
+
     Medusa.publish "foo.bar", 90
-    Medusa.publish "foo.buh", 100
-    Medusa.publish "foo.beeb", 60
-    Medusa.publish "foo.biz", 1000
-    Medusa.publish "foo.beeb", 76
-    Medusa.publish "foo.biz", 1542
+
+    # We should receive two because of the routes setup.
+    assert_receive {:hey, "You sent me", 90}, 5_000
+    assert_receive {:hey, "You sent me", 90}, 5_000
   end
   
 end

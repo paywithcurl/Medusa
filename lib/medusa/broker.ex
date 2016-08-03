@@ -1,6 +1,7 @@
 defmodule Medusa.Broker do
   @moduledoc false
   use GenServer
+  require Logger
 
   # API
   def start_link() do
@@ -30,6 +31,7 @@ defmodule Medusa.Broker do
   end
 
   def handle_call({:new_route, event}, _from, state) do
+    Logger.debug "#{inspect __MODULE__}: [#{inspect event}]"
     if Enum.find(state, fn(e) -> e == event end) do
       {:reply, :ok, state}
     else
@@ -42,6 +44,7 @@ defmodule Medusa.Broker do
   @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
 
   def handle_cast({:publish, event, payload}, state) do
+    Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
     Enum.each(state, fn(e) ->
       if Regex.match?(e, event) do
         @adapter.insert(base64_encode_regex(e), payload)

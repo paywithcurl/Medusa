@@ -9,8 +9,8 @@ defmodule Medusa do
   the following examples:
 
   ```
-  Medusa.consume ~r/^foo\.bar$/, Foo, :beep   # Matches only "foo.bar" events.
-  Medusa.consume ~r/^foo\.*/, Foo, :boop      # Matches all "foo. ..." events.
+  Medusa.consume ~r/^foo\.bar$/, &Honey.doo/1   # Matches only "foo.bar" events.
+  Medusa.consume ~r/^foo\.*/, &Lmbd.bo/1        # Matches all "foo. ..." events.
   ```
 
   Then, to publish something, you call:
@@ -68,18 +68,17 @@ defmodule Medusa do
     end
   end
 
-  defmacro consume(event, module, function) do
+  defmacro consume(event, function) do
     quote do
       # Register an route on the Broker
       Medusa.Broker.new_route(unquote(event))
-      f = fn x -> unquote(module).unquote(function)(x) end
 
       # Can't use PID here, because we need to register by name.
       case Medusa.Supervisors.Producers.start_child(unquote(event)) do
         {:ok, _pid} ->
-          Medusa.Supervisors.Consumers.start_child(f, unquote(event))
+          Medusa.Supervisors.Consumers.start_child(unquote(function), unquote(event))
         {:error, {:already_started, _pid}} ->
-          Medusa.Supervisors.Consumers.start_child(f, unquote(event))
+          Medusa.Supervisors.Consumers.start_child(unquote(function), unquote(event))
         bleh ->
           raise "Shit happened! #{bleh}"
       end

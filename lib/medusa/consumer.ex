@@ -21,7 +21,7 @@ defmodule Medusa.Consumer do
     unless (event |> Enum.empty?) do
       Enum.each(event,
         fn e -> result = state.(e)
-        Logger.debug "Result of computation: #{result}"
+        Logger.debug "Result of computation: #{inspect result}"
       end)
     end
     # We are a consumer, so we never emit events.
