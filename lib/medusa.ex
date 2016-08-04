@@ -68,24 +68,21 @@ defmodule Medusa do
     end
   end
 
-  defmacro consume(event, function) do
-    quote do
-      # Register an route on the Broker
-      Medusa.Broker.new_route(unquote(event))
+  def consume(route, function) do
+    # Register an route on the Broker
+    Medusa.Broker.new_route(route)
 
-      # Can't use PID here, because we need to register by name.
-      case Medusa.Supervisors.Producers.start_child(unquote(event)) do
-        {:ok, _pid} ->
-          Medusa.Supervisors.Consumers.start_child(unquote(function), unquote(event))
-        {:error, {:already_started, _pid}} ->
-          Medusa.Supervisors.Consumers.start_child(unquote(function), unquote(event))
-        what ->
-          raise "What happened? #{what}"
-      end
+    # Can't use PID here, because we need to register by name.
+    case Medusa.Supervisors.Producers.start_child(route) do
+      {:ok, _pid} ->
+        Medusa.Supervisors.Consumers.start_child(function, route)
+      {:error, {:already_started, _pid}} ->
+        Medusa.Supervisors.Consumers.start_child(function, route)
+      what ->
+        raise "What happened? #{what}"
     end
   end
 
-  def publish(route, payload) do
-    Medusa.Broker.publish route, payload
-  end
+  def publish(event, payload), do: Medusa.Broker.publish event, payload
+
 end
