@@ -16,11 +16,11 @@ defmodule ExternalIntegrationTest do
     Medusa.consume ~r/^foo\.bar$/, ctx[:fc]
     Medusa.consume ~r/^foo\.*/, ctx[:fc]
 
-    Medusa.publish "foo.bar", 90
+    Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have"}
 
     # We should receive two because of the routes setup.
-    assert_receive {:hey, "You sent me", 90}, 5_000
-    assert_receive {:hey, "You sent me", 90}, 5_000
+    assert_receive {:hey, "You sent me", %Medusa.Broker.Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}}
+    assert_receive {:hey, "You sent me", %Medusa.Broker.Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}}
   end
   
 end

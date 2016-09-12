@@ -83,6 +83,8 @@ defmodule Medusa do
     end
   end
 
-  def publish(event, payload), do: Medusa.Broker.publish event, payload
+  def publish(event, payload, metadata \\ %{}) do
+    Medusa.Broker.publish event, payload, metadata
+  end
 
 end

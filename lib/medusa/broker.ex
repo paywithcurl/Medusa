@@ -3,6 +3,10 @@ defmodule Medusa.Broker do
   use GenServer
   require Logger
 
+  defmodule Message do
+    defstruct body: %{}, metadata: %{}
+  end
+
   # API
   def start_link() do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
@@ -21,8 +25,9 @@ defmodule Medusa.Broker do
 
   TODO: Make this async.
   """
-  def publish(event, payload) do
-    GenServer.cast(__MODULE__, {:publish, event, payload})
+  def publish(event, payload, metadata \\ %{}) do
+    message = %Message{body: payload, metadata: metadata}
+    GenServer.cast(__MODULE__, {:publish, event, message})
   end
 
   # Callbacks
