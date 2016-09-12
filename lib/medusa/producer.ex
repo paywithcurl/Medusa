@@ -5,9 +5,9 @@ defmodule Medusa.Producer do
 
   @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
 
-  def start_link({:name, regex}) do
-    name = Medusa.Broker.base64_encode_regex(regex)
-    Logger.debug "Starting Producer #{inspect name} for: #{inspect regex}"
+  def start_link({:name, name}) do
+    name = Medusa.Broker.base64_encode_name name
+    Logger.debug "Starting Producer #{inspect name} for: #{inspect name}"
 
     GenStage.start_link __MODULE__, %{id: name, demand: 0}, name: String.to_atom(name)
   end
