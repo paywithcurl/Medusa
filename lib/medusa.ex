@@ -5,12 +5,12 @@ defmodule Medusa do
   @moduledoc """
   Medusa is a Pub/Sub system that leverages GenStage.
 
-  You should declare routes using `Regex` module, like
+  You should declare routes in `String` like
   the following examples:
 
   ```
-  Medusa.consume ~r/^foo\.bar$/, &Honey.doo/1   # Matches only "foo.bar" events.
-  Medusa.consume ~r/^foo\.*/, &Lmbd.bo/1        # Matches all "foo. ..." events.
+  Medusa.consume "foo.bar", &Honey.doo/1   # Matches only "foo.bar" events.
+  Medusa.consume "foo.*" &Lmbd.bo/1        # Matches all "foo. ..." events
   ```
 
   Then, to publish something, you call:
@@ -52,6 +52,7 @@ defmodule Medusa do
 
     children = [
       worker(Medusa.Broker, []),
+      supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
       supervisor(Medusa.Supervisors.Producers, []),
       supervisor(Medusa.Supervisors.Consumers, [])
     ] |> start_local_adapter_if_configured
@@ -83,6 +84,8 @@ defmodule Medusa do
     end
   end
 
-  def publish(event, payload), do: Medusa.Broker.publish event, payload
+  def publish(event, payload, metadata \\ %{}) do
+    Medusa.Broker.publish event, payload, metadata
+  end
 
 end

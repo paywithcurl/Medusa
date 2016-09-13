@@ -3,6 +3,10 @@ defmodule Medusa.Broker do
   use GenServer
   require Logger
 
+  defmodule Message do
+    defstruct body: %{}, metadata: %{}
+  end
+
   # API
   def start_link() do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
@@ -21,8 +25,9 @@ defmodule Medusa.Broker do
 
   TODO: Make this async.
   """
-  def publish(event, payload) do
-    GenServer.cast(__MODULE__, {:publish, event, payload})
+  def publish(event, payload, metadata \\ %{}) do
+    message = %Message{body: payload, metadata: metadata}
+    GenServer.cast(__MODULE__, {:publish, event, message})
   end
 
   # Callbacks
@@ -45,17 +50,40 @@ defmodule Medusa.Broker do
 
   def handle_cast({:publish, event, payload}, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
-    Enum.each(state, fn(e) ->
-      if Regex.match?(e, event) do
-        @adapter.insert(base64_encode_regex(e), payload)
-        GenServer.cast (base64_encode_regex(e) |> String.to_atom), {:trigger}
-      end
-    end)
+    Enum.each(state, &maybe_route {&1, event, payload})
     {:noreply, state}
   end
 
-
-  def base64_encode_regex(regex) do
-    Regex.source(regex) |> :base64.encode
+  defp maybe_route({route, event, payload}) do
+    f = fn -> maybe_route route, event, payload end
+    Task.Supervisor.start_child Broker.Supervisor, f
   end
+
+  defp maybe_route(route, event, payload) do
+    if route_match?(route, event) do
+      enqueue route, payload
+      trigger_producer route
+    end
+  end
+
+  defp enqueue(route, payload) do
+    @adapter.insert route, payload
+  end
+
+  defp trigger_producer(route) do
+    route
+    |> String.to_atom
+    |> GenServer.cast({:trigger})
+  end
+
+  defp route_match?(route, incoming)
+  when is_binary(route) and is_binary(incoming) do
+    route = String.split route, "."
+    incoming = String.split incoming, "."
+    route_match? route, incoming
+  end
+  defp route_match?([], []), do: true
+  defp route_match?(["*"|t1], [_|t2]), do: route_match?(t1, t2)
+  defp route_match?([h|t1], [h|t2]), do: route_match?(t1, t2)
+  defp route_match?(_, _), do: false
 end

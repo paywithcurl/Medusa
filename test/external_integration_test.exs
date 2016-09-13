@@ -8,19 +8,19 @@ defmodule ExternalIntegrationTest do
   end
 
   test "Add consumers", ctx do
-    assert {:ok, _pid} = Medusa.consume ~r/^foo\.bob$/, ctx[:fc]
+    assert {:ok, _pid} = Medusa.consume "foo.bob", ctx[:fc]
   end
 
   test "Send events", ctx do
     Process.register self, :test
-    Medusa.consume ~r/^foo\.bar$/, ctx[:fc]
-    Medusa.consume ~r/^foo\.*/, ctx[:fc]
+    Medusa.consume "foo.bar", ctx[:fc]
+    Medusa.consume "foo.*", ctx[:fc]
 
-    Medusa.publish "foo.bar", 90
+    Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have"}
 
     # We should receive two because of the routes setup.
-    assert_receive {:hey, "You sent me", 90}, 5_000
-    assert_receive {:hey, "You sent me", 90}, 5_000
+    assert_receive {:hey, "You sent me", %Medusa.Broker.Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}}
+    assert_receive {:hey, "You sent me", %Medusa.Broker.Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}}
   end
-  
+
 end
