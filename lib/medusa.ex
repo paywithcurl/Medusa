@@ -5,12 +5,12 @@ defmodule Medusa do
   @moduledoc """
   Medusa is a Pub/Sub system that leverages GenStage.
 
-  You should declare routes using `Regex` module, like
+  You should declare routes in `String` like
   the following examples:
 
   ```
-  Medusa.consume ~r/^foo\.bar$/, &Honey.doo/1   # Matches only "foo.bar" events.
-  Medusa.consume ~r/^foo\.*/, &Lmbd.bo/1        # Matches all "foo. ..." events.
+  Medusa.consume "foo.bar", &Honey.doo/1   # Matches only "foo.bar" events.
+  Medusa.consume "foo.*" &Lmbd.bo/1        # Matches all "foo. ..." events
   ```
 
   Then, to publish something, you call:
