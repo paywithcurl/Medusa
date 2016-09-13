@@ -50,12 +50,17 @@ defmodule Medusa.Broker do
 
   def handle_cast({:publish, event, payload}, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
-    Enum.each(state, &maybe_route(&1, event, payload))
+    Enum.each(state, &maybe_route {&1, event, payload})
     {:noreply, state}
   end
 
-  defp maybe_route(route, incoming, payload) do
-    if route_match?(route, incoming) do
+  defp maybe_route({route, event, payload}) do
+    f = fn -> maybe_route route, event, payload end
+    Task.Supervisor.start_child Broker.Supervisor, f
+  end
+
+  defp maybe_route(route, event, payload) do
+    if route_match?(route, event) do
       enqueue route, payload
       trigger_producer route
     end

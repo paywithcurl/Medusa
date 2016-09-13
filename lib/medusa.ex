@@ -52,6 +52,7 @@ defmodule Medusa do
 
     children = [
       worker(Medusa.Broker, []),
+      supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
       supervisor(Medusa.Supervisors.Producers, []),
       supervisor(Medusa.Supervisors.Consumers, [])
     ] |> start_local_adapter_if_configured
