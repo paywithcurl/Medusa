@@ -54,25 +54,19 @@ defmodule Medusa.Broker do
     {:noreply, state}
   end
 
-
-  def base64_encode_name(name), do: :base64.encode name
-
   defp maybe_route(route, incoming, payload) do
     if route_match?(route, incoming) do
-      insert_route_to_adapter route, payload
+      enqueue route, payload
       trigger_producer route
     end
   end
 
-  defp insert_route_to_adapter(route, payload) do
-    route
-    |> base64_encode_name
-    |> @adapter.insert(payload)
+  defp enqueue(route, payload) do
+    @adapter.insert route, payload
   end
 
   defp trigger_producer(route) do
     route
-    |> base64_encode_name
     |> String.to_atom
     |> GenServer.cast({:trigger})
   end

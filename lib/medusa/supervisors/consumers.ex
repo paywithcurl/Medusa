@@ -15,7 +15,7 @@ defmodule Medusa.Supervisors.Consumers do
   end
 
   def start_child(f, to_link) do
-    to_link = to_link |> Medusa.Broker.base64_encode_name |> String.to_atom
+    to_link = String.to_atom to_link
     Supervisor.start_child(__MODULE__, [function: f, to_link: to_link])
   end
 end
