@@ -28,18 +28,20 @@ defmodule ExternalIntegrationTest do
     Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have", to: self}
 
     # We should receive two because of the routes setup.
-    body = %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: self}}
-    assert_receive body
-    assert_receive body
+    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have",
+                                                  from: MyModule.Echo, to: _}}
+    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have",
+                                                  from: MyModule.Echo, to: _}}
   end
 
   test "Send event to consumer with bind_once: true.
         consumer and producer should die" do
     assert {:ok, pid} = Medusa.consume "you.me", &MyModule.echo/1, bind_once: true
     assert Process.alive?(pid)
-    assert producer = Process.whereis(:"you.me")
+    producer = Process.whereis(:"you.me")
+    assert producer
     Medusa.publish "you.me", 100, %{to: self}
-    assert_receive %Message{body: 100, metadata: %{to: self, from: MyModule.Echo}}
+    assert_receive %Message{body: 100, metadata: %{to: _, from: MyModule.Echo}}
     Process.sleep(10) # wait producer and consumer die
     refute Process.alive?(pid)
     refute Process.alive?(producer)
@@ -51,10 +53,11 @@ defmodule ExternalIntegrationTest do
     assert {:ok, pid2} = Medusa.consume "me.you", &MyModule.echo/1, bind_once: true
     assert Process.alive?(pid1)
     assert Process.alive?(pid2)
-    assert producer = Process.whereis(:"me.you")
+    producer = Process.whereis(:"me.you")
+    assert producer
     Medusa.publish "me.you", 1000, %{to: self}
-    assert_receive %Message{body: 1000, metadata: %{to: self, from: MyModule.Echo}}
-    assert_receive %Message{body: 1000, metadata: %{to: self, from: MyModule.Ping}}
+    assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Echo}}
+    assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Ping}}
     Process.sleep(10) # wait consumer bind_once die
     assert Process.alive?(pid1)
     refute Process.alive?(pid2)
