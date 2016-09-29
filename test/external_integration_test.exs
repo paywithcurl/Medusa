@@ -16,30 +16,21 @@ defmodule ExternalIntegrationTest do
 
   alias Medusa.Broker.Message
 
-  setup do
-    fc = fn x -> send(:test, {:hey, "You sent me", x}) end
-    [fc: fc]
+  test "Add consumers" do
+    assert {:ok, _pid} = Medusa.consume "foo.bob", &IO.puts/1
   end
 
-  test "Add consumers", ctx do
-    assert {:ok, _pid} = Medusa.consume "foo.bob", ctx[:fc]
-  end
-
-  test "Add invalid consumer", ctx do
-    assert_raise MatchError, ~r/arity/, fn -> Medusa.consume "foo.bob", fn -> IO.puts("blah") end end
-  end
-
-
-  test "Send events", ctx do
+  test "Send events" do
     Process.register self, :test
-    Medusa.consume "foo.bar", ctx[:fc]
-    Medusa.consume "foo.*", ctx[:fc]
+    Medusa.consume "foo.bar", &MyModule.echo/1
+    Medusa.consume "foo.*", &MyModule.echo/1
 
-    Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have"}
+    Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have", to: self}
 
     # We should receive two because of the routes setup.
-    assert_receive {:hey, "You sent me", %Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}}
-    assert_receive {:hey, "You sent me", %Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}}
+    body = %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: self}}
+    assert_receive body
+    assert_receive body
   end
 
   test "Send event to consumer with bind_once: true.
