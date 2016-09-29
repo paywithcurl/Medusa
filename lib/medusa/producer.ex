@@ -15,6 +15,10 @@ defmodule Medusa.Producer do
     {:producer, state, dispatcher: GenStage.BroadcastDispatcher}
   end
 
+  def handle_cast(:exit, state) do
+    {:stop, :bind_once, state}
+  end
+
   def handle_demand(demand, state) do
     Logger.debug "Current demand: #{inspect demand}."
     get_next(%{state | demand: demand})

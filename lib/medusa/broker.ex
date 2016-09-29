@@ -1,5 +1,6 @@
 defmodule Medusa.Broker do
   @moduledoc false
+  alias Experimental.GenStage
   use GenServer
   require Logger
 
@@ -28,6 +29,16 @@ defmodule Medusa.Broker do
   def publish(event, payload, metadata \\ %{}) do
     message = %Message{body: payload, metadata: metadata}
     GenServer.cast(__MODULE__, {:publish, event, message})
+  end
+
+  @doc """
+  Send exit signal to producer route name.
+  """
+  def exit_producer(route) do
+    case Process.whereis(route) do
+      nil -> :ok
+      pid when is_pid(pid) -> GenStage.cast pid, :exit
+    end
   end
 
   # Callbacks
