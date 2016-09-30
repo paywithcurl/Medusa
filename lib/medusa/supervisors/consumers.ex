@@ -14,8 +14,8 @@ defmodule Medusa.Supervisors.Consumers do
     supervise(children, strategy: :simple_one_for_one)
   end
 
-  def start_child(f, to_link) do
+  def start_child(f, to_link, opts \\ []) do
     to_link = String.to_atom to_link
-    Supervisor.start_child(__MODULE__, [function: f, to_link: to_link])
+    Supervisor.start_child(__MODULE__, [[function: f, to_link: to_link, opts: opts]])
   end
 end
