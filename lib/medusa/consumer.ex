@@ -1,6 +1,5 @@
 defmodule Medusa.Consumer do
   alias Experimental.GenStage
-  alias Medusa.Broker
   use GenStage
   require Logger
 
@@ -14,7 +13,7 @@ defmodule Medusa.Consumer do
     GenStage.start_link __MODULE__, params
   end
 
-  def init(%{function: f, to_link: link, opts: opts} = params) do
+  def init(%{to_link: link} = params) do
     {:consumer, params, subscribe_to: [link]}
   end
 
@@ -33,14 +32,10 @@ defmodule Medusa.Consumer do
   end
   defp do_handle_events(events, %{function: f, opts: opts} = state) do
     Enum.each(events, &f.(&1))
-    case opts[:bind_once] do
-      :full ->
-        Broker.exit_producer state.to_link
-        {:stop, :bind_once, state}
-      :only_consumer ->
-        {:stop, :bind_once, state}
-      _ ->
-        {:noreply, [], state}
+    if opts[:bind_once] do
+      {:stop, :normal, state}
+    else
+      {:noreply, [], state}
     end
   end
 
