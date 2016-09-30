@@ -28,32 +28,30 @@ defmodule ExternalIntegrationTest do
     Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have", to: self}
 
     # We should receive two because of the routes setup.
-    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have",
-                                                  from: MyModule.Echo, to: _}}
-    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have",
-                                                  from: MyModule.Echo, to: _}}
+    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: _self}}
+    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: _self}}
   end
 
   test "Send event to consumer with bind_once: true.
         consumer and producer should die" do
     assert {:ok, pid} = Medusa.consume "you.me", &MyModule.echo/1, bind_once: true
-    assert Process.alive?(pid)
     producer = Process.whereis(:"you.me")
+    assert Process.alive?(pid)
     assert producer
     Medusa.publish "you.me", 100, %{to: self}
-    assert_receive %Message{body: 100, metadata: %{to: _, from: MyModule.Echo}}
+    assert_receive %Message{body: 100, metadata: %{to: _self, from: MyModule.Echo}}
     Process.sleep(10) # wait producer and consumer die
     refute Process.alive?(pid)
     refute Process.alive?(producer)
   end
 
-  test "Send event to consumer with bind_once: true.
-        But route is shared with others then producer should not die" do
+  test "Send event to consumer with bind_once: true in already exists route
+        So producer is shared with others then it should not die" do
     assert {:ok, pid1} = Medusa.consume "me.you", &MyModule.ping/1
     assert {:ok, pid2} = Medusa.consume "me.you", &MyModule.echo/1, bind_once: true
+    producer = Process.whereis(:"me.you")
     assert Process.alive?(pid1)
     assert Process.alive?(pid2)
-    producer = Process.whereis(:"me.you")
     assert producer
     Medusa.publish "me.you", 1000, %{to: self}
     assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Echo}}
@@ -61,6 +59,22 @@ defmodule ExternalIntegrationTest do
     Process.sleep(10) # wait consumer bind_once die
     assert Process.alive?(pid1)
     refute Process.alive?(pid2)
+    assert Process.alive?(producer)
+  end
+
+  test "Send event to consumer with bind_once: true and then
+        start consume with long-running consumer, producer should survive" do
+    assert {:ok, pid1} = Medusa.consume "he.she", &MyModule.echo/1, bind_once: true
+    assert {:ok, pid2} = Medusa.consume "he.she", &MyModule.ping/1
+    assert Process.alive?(pid1)
+    assert Process.alive?(pid2)
+    producer = Process.whereis(:"he.she")
+    Medusa.publish "he.she", 1, %{to: self}
+    assert_receive %Message{body: 1, metadata: %{to: _self, from: MyModule.Echo}}
+    assert_receive %Message{body: 1, metadata: %{to: _self, from: MyModule.Ping}}
+    Process.sleep(10) # wait consumer bind_once die
+    refute Process.alive?(pid1)
+    assert Process.alive?(pid2)
     assert Process.alive?(producer)
   end
 

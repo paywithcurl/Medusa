@@ -3,20 +3,18 @@ defmodule Medusa.Producer do
   use GenStage
   require Logger
 
+  defstruct id: nil, demand: 0, consumers: MapSet.new
+
   @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
 
   def start_link({:name, name}) do
     Logger.debug "Starting Producer #{inspect name} for: #{inspect name}"
-
-    GenStage.start_link __MODULE__, %{id: name, demand: 0}, name: String.to_atom(name)
+    state = %__MODULE__{id: name}
+    GenStage.start_link __MODULE__, state, name: String.to_atom(name)
   end
 
   def init(state) do
     {:producer, state, dispatcher: GenStage.BroadcastDispatcher}
-  end
-
-  def handle_cast(:exit, state) do
-    {:stop, :bind_once, state}
   end
 
   def handle_demand(demand, state) do
@@ -27,6 +25,26 @@ defmodule Medusa.Producer do
   def handle_cast({:trigger}, state) do
     Logger.debug "Triggered"
     get_next(state)
+  end
+
+  def handle_subscribe(:consumer, _opts, {pid, _ref}, %{consumers: consumers} = state) do
+    new_state = Map.put(state, :consumers, MapSet.put(consumers, pid))
+    {:automatic, new_state}
+  end
+
+  def handle_cancel(_reason, {pid, _ref}, %{consumers: consumers} = state) do
+    cond do
+      MapSet.member?(consumers, pid) && MapSet.size(consumers) == 1 ->
+        {:stop, :normal, state}
+      MapSet.member?(consumers, pid) ->
+        new_state = Map.put(state, :consumers, MapSet.delete(consumers, pid))
+        {:noreply, [], new_state}
+      true ->
+        {:noreply, [], state}
+    end
+  end
+  def handle_cancel(_reason, _from, state) do
+    {:noreply, [], state}
   end
 
   defp get_next(state) do

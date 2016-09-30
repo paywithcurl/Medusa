@@ -73,28 +73,12 @@ defmodule Medusa do
     # Register an route on the Broker
     Medusa.Broker.new_route(route)
 
-    # Can't use PID here, because we need to register by name.
-    producer = Medusa.Supervisors.Producers.start_child(route)
-    opts = build_exit_strategy opts, producer
+    Medusa.Supervisors.Producers.start_child(route)
     Medusa.Supervisors.Consumers.start_child(function, route, opts)
   end
 
   def publish(event, payload, metadata \\ %{}) do
     Medusa.Broker.publish event, payload, metadata
-  end
-
-  defp build_exit_strategy(opts, producer_start_result) do
-    build_exit_strategy opts[:bind_once], opts, producer_start_result
-  end
-
-  defp build_exit_strategy(true, opts, {:ok, pid}) do
-    Keyword.put opts, :bind_once, :full
-  end
-  defp build_exit_strategy(true, opts, {:error, {:already_started, pid}}) do
-    Keyword.put opts, :bind_once, :only_consumer
-  end
-  defp build_exit_strategy(_, opts, _) do
-    opts
   end
 
 end
