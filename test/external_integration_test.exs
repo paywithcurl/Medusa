@@ -11,6 +11,11 @@ defmodule ExternalIntegrationTest do
     assert {:ok, _pid} = Medusa.consume "foo.bob", ctx[:fc]
   end
 
+  test "Add invalid consumer", ctx do
+    assert_raise MatchError, ~r/arity/, fn -> Medusa.consume "foo.bob", fn -> IO.puts("blah") end end
+  end
+
+
   test "Send events", ctx do
     Process.register self, :test
     Medusa.consume "foo.bar", ctx[:fc]
