@@ -71,6 +71,7 @@ defmodule Medusa do
 
   def consume(route, function, opts \\ []) do
     {_, 1} =  :erlang.fun_info(function, :arity)
+
     # Register an route on the Broker
     Medusa.Broker.new_route(route)
 

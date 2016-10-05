@@ -20,6 +20,10 @@ defmodule ExternalIntegrationTest do
     assert {:ok, _pid} = Medusa.consume "foo.bob", &IO.puts/1
   end
 
+  test "Add invalid consumer", ctx do
+    assert_raise MatchError, ~r/arity/, fn -> Medusa.consume "foo.bob", fn -> IO.puts("blah") end end
+  end
+
   test "Send events" do
     Process.register self, :test
     Medusa.consume "foo.bar", &MyModule.echo/1
@@ -28,8 +32,8 @@ defmodule ExternalIntegrationTest do
     Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have", to: self}
 
     # We should receive two because of the routes setup.
-    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: _self}}
-    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: _self}}
+    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: _self}}, 500
+    assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have", from: MyModule.Echo, to: _self}}, 500
   end
 
   test "Send event to consumer with bind_once: true.
@@ -39,7 +43,7 @@ defmodule ExternalIntegrationTest do
     assert Process.alive?(pid)
     assert producer
     Medusa.publish "you.me", 100, %{to: self}
-    assert_receive %Message{body: 100, metadata: %{to: _self, from: MyModule.Echo}}
+    assert_receive %Message{body: 100, metadata: %{to: _self, from: MyModule.Echo}}, 500
     Process.sleep(10) # wait producer and consumer die
     refute Process.alive?(pid)
     refute Process.alive?(producer)
@@ -54,8 +58,8 @@ defmodule ExternalIntegrationTest do
     assert Process.alive?(pid2)
     assert producer
     Medusa.publish "me.you", 1000, %{to: self}
-    assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Echo}}
-    assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Ping}}
+    assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Echo}}, 500
+    assert_receive %Message{body: 1000, metadata: %{to: _self, from: MyModule.Ping}}, 500
     Process.sleep(10) # wait consumer bind_once die
     assert Process.alive?(pid1)
     refute Process.alive?(pid2)
@@ -70,8 +74,8 @@ defmodule ExternalIntegrationTest do
     assert Process.alive?(pid2)
     producer = Process.whereis(:"he.she")
     Medusa.publish "he.she", 1, %{to: self}
-    assert_receive %Message{body: 1, metadata: %{to: _self, from: MyModule.Echo}}
-    assert_receive %Message{body: 1, metadata: %{to: _self, from: MyModule.Ping}}
+    assert_receive %Message{body: 1, metadata: %{to: _self, from: MyModule.Echo}}, 500
+    assert_receive %Message{body: 1, metadata: %{to: _self, from: MyModule.Ping}}, 500
     Process.sleep(10) # wait consumer bind_once die
     refute Process.alive?(pid1)
     assert Process.alive?(pid2)
