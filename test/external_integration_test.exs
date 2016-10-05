@@ -20,7 +20,7 @@ defmodule ExternalIntegrationTest do
     assert {:ok, _pid} = Medusa.consume "foo.bob", &IO.puts/1
   end
 
-  test "Add invalid consumer", ctx do
+  test "Add invalid consumer" do
     assert_raise MatchError, ~r/arity/, fn -> Medusa.consume "foo.bob", fn -> IO.puts("blah") end end
   end
 
@@ -80,6 +80,17 @@ defmodule ExternalIntegrationTest do
     refute Process.alive?(pid1)
     assert Process.alive?(pid2)
     assert Process.alive?(producer)
+  end
+
+  @tag :clustered
+  test "clustered" do
+    node1 = :'node1@127.0.0.1'
+    node2 = :'node2@127.0.0.1'
+    Medusa.consume "clustered", &MyModule.echo/1
+    :rpc.call(node1, Medusa, :publish, ["clustered", "ICANFLY", %{to: self}])
+    :rpc.call(node2, Medusa, :publish, ["clustered", "YOUSEEME", %{to: self}])
+    assert_receive %Message{body: "ICANFLY", metadata: %{to: _, from: MyModule.Echo}}, 500
+    assert_receive %Message{body: "YOUSEEME", metadata: %{to: _, from: MyModule.Echo}}, 500
   end
 
 end
