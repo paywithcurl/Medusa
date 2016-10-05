@@ -5,6 +5,7 @@ defmodule Medusa.Mixfile do
     [app: :medusa,
      version: "0.1.0",
      elixir: "~> 1.3",
+     elixirc_paths: elixirc_paths(Mix.env),
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps()]
@@ -16,6 +17,10 @@ defmodule Medusa.Mixfile do
   def application do
     [applications: [:logger], mod: {Medusa, []}]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_),     do: ["lib"]
+
 
   # Dependencies can be Hex packages:
   #
