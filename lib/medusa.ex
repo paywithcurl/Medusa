@@ -69,21 +69,14 @@ defmodule Medusa do
     end
   end
 
-  def consume(route, function) do
+  def consume(route, function, opts \\ []) do
     {_, 1} =  :erlang.fun_info(function, :arity)
 
     # Register an route on the Broker
     Medusa.Broker.new_route(route)
 
-    # Can't use PID here, because we need to register by name.
-    case Medusa.Supervisors.Producers.start_child(route) do
-      {:ok, _pid} ->
-        Medusa.Supervisors.Consumers.start_child(function, route)
-      {:error, {:already_started, _pid}} ->
-        Medusa.Supervisors.Consumers.start_child(function, route)
-      what ->
-        raise "What happened? #{what}"
-    end
+    Medusa.Supervisors.Producers.start_child(route)
+    Medusa.Supervisors.Consumers.start_child(function, route, opts)
   end
 
   def publish(event, payload, metadata \\ %{}) do
