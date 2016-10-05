@@ -31,6 +31,10 @@ defmodule Medusa.Broker do
   end
 
   # Callbacks
+
+  @doc """
+  Register self into pg2 group. see `pg2_namespace/0`
+  """
   def init(_opts) do
     :ok = :pg2.create pg2_namespace
     :ok = :pg2.join pg2_namespace, self
@@ -86,8 +90,10 @@ defmodule Medusa.Broker do
   defp route_match?([h|t1], [h|t2]), do: route_match?(t1, t2)
   defp route_match?(_, _), do: false
 
+  # process group name
   defp pg2_namespace, do: {:medusa, __MODULE__}
 
+  # get all members from process group name
   defp get_members, do: :pg2.get_members pg2_namespace
 
   defp broadcast(pids, msg) when is_list(pids) do
