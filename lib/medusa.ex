@@ -38,13 +38,13 @@ defmodule Medusa do
 
 
   # Check if configuration exists.
-  unless Application.get_env(:medusa, Medusa) do
-    raise @misconfiguration_error
-  end
+  # unless Application.get_env(:medusa, Medusa) do
+  #   raise @misconfiguration_error
+  # end
 
-  unless Keyword.get(Application.get_env(:medusa, Medusa), :adapter) do
-    raise @misconfiguration_error
-  end
+  # unless Keyword.get(Application.get_env(:medusa, Medusa), :adapter) do
+  #   raise @misconfiguration_error
+  # end
 
 
   def start(_type, _args) do
