@@ -5,8 +5,6 @@ defmodule Medusa.Producer do
 
   defstruct id: nil, demand: 0, consumers: MapSet.new
 
-  @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
-
   def start_link({:name, name}) do
     Logger.debug "Starting Producer #{inspect name} for: #{inspect name}"
     state = %__MODULE__{id: name}
@@ -50,11 +48,14 @@ defmodule Medusa.Producer do
   defp get_next(state) do
     Logger.debug "#{inspect __MODULE__}: #{inspect state}"
     if state.demand > 0 do
-      event = @adapter.next(state.id)
+      event = adapter.next(state.id)
       Logger.debug "#{inspect __MODULE__}: event #{inspect event}"
       d = state.demand
       {:noreply, [event], %{state | demand: d - 1}}
     else {:noreply, [], state} end
   end
 
+  defp adapter do
+    Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
+  end
 end

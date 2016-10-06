@@ -3,8 +3,6 @@ defmodule Medusa.Broker do
   use GenServer
   require Logger
 
-  @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
-
   defmodule Message do
     defstruct body: %{}, metadata: %{}
   end
@@ -70,7 +68,11 @@ defmodule Medusa.Broker do
   end
 
   defp enqueue(route, payload) do
-    @adapter.insert route, payload
+    adapter.insert route, payload
+  end
+
+  defp adapter do
+    Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
   end
 
   defp trigger_producer(route) do
