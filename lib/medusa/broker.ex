@@ -3,6 +3,8 @@ defmodule Medusa.Broker do
   use GenServer
   require Logger
 
+  @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
+
   defmodule Message do
     defstruct body: %{}, metadata: %{}
   end
@@ -13,44 +15,45 @@ defmodule Medusa.Broker do
   end
 
   @doc """
-  Adds a new route to the broker. If there is an existing route, 
-  it just ignores it. 
-  """  
+  Adds a new route to the broker. If there is an existing route,
+  it just ignores it.
+  """
   def new_route(event) do
-    GenServer.call(__MODULE__, {:new_route, event})
+    broadcast get_members, {:new_route, event}
   end
 
   @doc """
   Sends to the matching routes the event, using the configured adapter.
-
-  TODO: Make this async.
   """
   def publish(event, payload, metadata \\ %{}) do
     message = %Message{body: payload, metadata: metadata}
-    GenServer.cast(__MODULE__, {:publish, event, message})
+    broadcast get_members, {:publish, event, message}
   end
 
   # Callbacks
+
+  @doc """
+  Register self into pg2 group. see `pg2_namespace/0`
+  """
   def init(_opts) do
-    {:ok, []}
+    :ok = :pg2.create pg2_namespace
+    :ok = :pg2.join pg2_namespace, self
+    {:ok, MapSet.new}
   end
 
   def handle_call({:new_route, event}, _from, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]"
-    if Enum.find(state, fn(e) -> e == event end) do
-      {:reply, :ok, state}
-    else
-      state = [event | state]
-      {:reply, :ok, state}
-    end
-
+    {:reply, :ok, MapSet.put(state, event)}
   end
 
-  @adapter Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
-
-  def handle_cast({:publish, event, payload}, state) do
+  def handle_call({:publish, event, payload}, _from, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
     Enum.each(state, &maybe_route {&1, event, payload})
+    {:reply, :ok, state}
+  end
+
+  def handle_info({:forward_to_local, msg}, state) do
+    handle_call(msg, self, state)
     {:noreply, state}
   end
 
@@ -86,4 +89,19 @@ defmodule Medusa.Broker do
   defp route_match?(["*"|t1], [_|t2]), do: route_match?(t1, t2)
   defp route_match?([h|t1], [h|t2]), do: route_match?(t1, t2)
   defp route_match?(_, _), do: false
+
+  # process group name
+  defp pg2_namespace, do: {:medusa, __MODULE__}
+
+  # get all members from process group name
+  defp get_members, do: :pg2.get_members pg2_namespace
+
+  defp broadcast(pids, msg) when is_list(pids) do
+    Enum.each pids, fn
+      pid when is_pid(pid) and node(pid) == node() ->
+        GenServer.call __MODULE__, msg
+      pid ->
+        send pid, {:forward_to_local, msg}
+    end
+  end
 end
