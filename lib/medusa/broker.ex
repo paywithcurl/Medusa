@@ -17,7 +17,7 @@ defmodule Medusa.Broker do
   it just ignores it.
   """
   def new_route(event) do
-    broadcast get_members, {:new_route, event}
+    broadcast get_all_members, {:new_route, event}
   end
 
   @doc """
@@ -34,8 +34,9 @@ defmodule Medusa.Broker do
   Register self into pg2 group. see `pg2_namespace/0`
   """
   def init(_opts) do
-    :ok = :pg2.create pg2_namespace
-    :ok = :pg2.join pg2_namespace, self
+    group = pg2_namespace
+    :ok = :pg2.create group
+    :ok = :pg2.join group, self
     {:ok, MapSet.new}
   end
 
@@ -93,17 +94,46 @@ defmodule Medusa.Broker do
   defp route_match?(_, _), do: false
 
   # process group name
-  defp pg2_namespace, do: {:medusa, __MODULE__}
+  defp pg2_namespace do
+    name =
+      :medusa
+      |> Application.get_env(Medusa)
+      |> Keyword.get(:group, random_name)
+    {:medusa, name}
+  end
 
-  # get all members from process group name
-  defp get_members, do: :pg2.get_members pg2_namespace
+  # random name
+  defp random_name(len \\ 32) do
+    len
+    |> :crypto.strong_rand_bytes
+    |> Base.url_encode64
+    |> binary_part(0, len)
+  end
+
+  # get all nodes in medusa
+  defp get_all_members do
+    :pg2.which_groups
+    |> Enum.filter_map(&elem(&1, 0) == :medusa, &:pg2.get_members/1)
+  end
+
+  # get all medusa groups and random one member from each group
+  defp get_members do
+    get_all_members
+    |> Enum.map(&random_member/1)
+  end
+
+  defp random_member([]), do: []
+  defp random_member([pid]), do: pid
+  defp random_member(pids) when is_list(pids), do: Enum.random pids
 
   defp broadcast(pids, msg) when is_list(pids) do
-    Enum.each pids, fn
+    pids
+    |> List.flatten
+    |> Enum.each(fn
       pid when is_pid(pid) and node(pid) == node() ->
         GenServer.call __MODULE__, msg
       pid ->
         send pid, {:forward_to_local, msg}
-    end
+    end)
   end
 end
