@@ -82,8 +82,12 @@ defmodule ExternalIntegrationTest do
     assert Process.alive?(producer)
   end
 
-  @tag :clustered
-  test "clustered" do
+  @tag :pg2
+  test "pg2 clustered" do
+    Application.put_env(:medusa, Medusa, [adapter: Medusa.Adapter.PG2], persistent: true)
+    Application.stop(:medusa)
+    Application.ensure_all_started(:medusa)
+    Medusa.Cluster.spawn
     node1 = :'node1@127.0.0.1'
     node2 = :'node2@127.0.0.1'
     Medusa.consume "clustered", &MyModule.echo/1
