@@ -3,7 +3,9 @@ defmodule Medusa do
   require Logger
   import Supervisor.Spec, warn: false
 
-  @available_adapters ~w(Medusa.Adapter.Local)
+  @available_adapters [Medusa.Adapter.Local,
+                       Medusa.Adapter.PG2,
+                       Medusa.Adapter.RabbitMQ]
   @default_adapter Medusa.Adapter.Local
 
   @moduledoc """
@@ -32,8 +34,8 @@ defmodule Medusa do
   def start(_type, _args) do
     ensure_config_correct()
     children = [
-      worker(Medusa.Broker, []),
-      child_adapter(),
+      child_broker(),
+      worker(Medusa.Queue, []),
       supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
       supervisor(Medusa.Supervisors.Producers, []),
       supervisor(Medusa.Supervisors.Consumers, [])
@@ -57,7 +59,7 @@ defmodule Medusa do
     Medusa.Broker.publish event, payload, metadata
   end
 
-  defp child_adapter do
+  defp child_broker do
     :medusa
     |> Application.get_env(Medusa)
     |> Keyword.fetch!(:adapter)

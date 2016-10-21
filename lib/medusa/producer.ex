@@ -2,6 +2,7 @@ defmodule Medusa.Producer do
   alias Experimental.GenStage
   use GenStage
   require Logger
+  alias Medusa.Queue
 
   defstruct id: nil, demand: 0, consumers: MapSet.new
 
@@ -48,14 +49,11 @@ defmodule Medusa.Producer do
   defp get_next(state) do
     Logger.debug "#{inspect __MODULE__}: #{inspect state}"
     if state.demand > 0 do
-      event = adapter.next(state.id)
+      event = Queue.next(state.id)
       Logger.debug "#{inspect __MODULE__}: event #{inspect event}"
       d = state.demand
       {:noreply, [event], %{state | demand: d - 1}}
     else {:noreply, [], state} end
   end
 
-  defp adapter do
-    Keyword.get(Application.get_env(:medusa, Medusa), :adapter)
-  end
 end
