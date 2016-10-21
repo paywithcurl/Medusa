@@ -5,7 +5,7 @@ defmodule Medusa.Adapter.PG2 do
   require Logger
   alias Medusa.{Broker}
 
-  def start_link() do
+  def start_link do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
