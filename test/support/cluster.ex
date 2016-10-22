@@ -16,7 +16,11 @@ defmodule Medusa.Cluster do
   end
 
   defp spawn_node(node_host) do
-    {:ok, node} = :slave.start(to_char_list("127.0.0.1"), node_name(node_host), inet_loader_args())
+    node =
+      case :slave.start(to_char_list("127.0.0.1"), node_name(node_host), inet_loader_args()) do
+        {:ok, node} -> node
+        {:error, {:already_running, node}} -> node
+      end
     add_code_paths(node)
     transfer_configuration(node)
     ensure_applications_started(node)

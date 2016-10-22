@@ -32,6 +32,9 @@ defmodule Medusa.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:gen_stage, "~> 0.4.0"}]
+    [{:amqp, "~> 0.1.5"},
+     {:amqp_client, git: "https://github.com/dsrosario/amqp_client.git", branch: "erlang_otp_19", override: true},
+     {:gen_stage, "~> 0.4.0"},
+     {:poison, "~> 3.0.0"}]
   end
 end

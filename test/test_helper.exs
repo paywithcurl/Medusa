@@ -1,3 +1,3 @@
-ExUnit.configure(exclude: [pg2: true])
+ExUnit.configure(exclude: [rabbitmq: true])
 
 ExUnit.start

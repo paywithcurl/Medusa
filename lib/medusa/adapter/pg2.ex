@@ -10,7 +10,7 @@ defmodule Medusa.Adapter.PG2 do
   end
 
   def new_route(event) do
-    broadcast(get_all_members, {:new_route, event})
+    GenServer.call(__MODULE__, {:new_route, event})
   end
 
   def publish(event, message) do
@@ -39,7 +39,7 @@ defmodule Medusa.Adapter.PG2 do
   end
 
   def handle_info({:forward_to_local, msg}, state) do
-    handle_call(msg, self, state)
+    spawn(fn -> GenServer.call(__MODULE__, msg) end)
     {:noreply, state}
   end
 
