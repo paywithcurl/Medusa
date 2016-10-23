@@ -1,18 +1,19 @@
 defmodule MedusaTest do
   use ExUnit.Case
-  import Medusa.TestHelper
   doctest Medusa
 
   test "not config should fallback to default" do
     Application.delete_env(:medusa, Medusa, persistent: true)
-    restart_app()
+    Application.stop(:medusa)
+    Application.ensure_all_started(:medusa)
     assert Application.get_env(:medusa, Medusa) ==
       [adapter: Medusa.Adapter.Local]
   end
 
   test "config invalid adapter should fallback to Local" do
     Application.put_env(:medusa, Medusa, [adapter: Wrong], persistent: true)
-    restart_app()
+    Application.stop(:medusa)
+    Application.ensure_all_started(:medusa)
     assert Application.get_env(:medusa, Medusa) ==
       [adapter: Medusa.Adapter.Local]
   end

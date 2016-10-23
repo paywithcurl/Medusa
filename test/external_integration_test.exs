@@ -13,7 +13,6 @@ defmodule MyModule do
     message = put_in message, [Access.key(:metadata), :from], MyModule.RPC
     :self |> Process.whereis |> send(message)
   end
-
 end
 
 defmodule ExternalIntegrationTest do
@@ -24,16 +23,17 @@ defmodule ExternalIntegrationTest do
 
   describe "Local Adapter" do
 
+    setup do
+      put_adapter_config(Medusa.Adapter.Local)
+      :ok
+    end
+
     test "Send events" do
-      Medusa.consume "foo.bar", &MyModule.echo/1
-      Medusa.consume "foo.*", &MyModule.echo/1
-      Medusa.publish "foo.bar", 90, %{"optional_field" => "nice_to_have", to: self}
-      assert_receive %Message{body: 90,
-                              metadata: %{"optional_field" => "nice_to_have",
-                                          from: MyModule.Echo, to: _self}}, 500
-      assert_receive %Message{body: 90,
-                              metadata: %{"optional_field" => "nice_to_have",
-                                          from: MyModule.Echo, to: _self}}, 500
+      Medusa.consume("foo.bar", &MyModule.echo/1)
+      Medusa.consume("foo.*", &MyModule.ping/1)
+      Medusa.publish("foo.bar", 90, %{"optional_field" => "nice_to_have", to: self})
+      assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}
+      assert_receive %Message{body: 90, metadata: %{"optional_field" => "nice_to_have"}}
     end
 
     test "Send event to consumer with bind_once: true.
@@ -93,8 +93,7 @@ defmodule ExternalIntegrationTest do
 
   describe "PG2 Adapter" do
     setup do
-      Application.put_env(:medusa, Medusa, [adapter: Medusa.Adapter.PG2], persistent: false)
-      restart_app()
+      put_adapter_config(Medusa.Adapter.PG2)
       Medusa.Cluster.spawn
       {:ok, node1: :'node1@127.0.0.1', node2: :'node2@127.0.0.1'}
     end
@@ -166,9 +165,7 @@ defmodule ExternalIntegrationTest do
 
   describe "RabbitMQ Adapter" do
     setup do
-      import Supervisor.Spec, warn: false
-      Application.put_env(:medusa, Medusa, [adapter: Medusa.Adapter.RabbitMQ])
-      Supervisor.start_child(Medusa.Supervisor, worker(Medusa.Adapter.RabbitMQ, []))
+      put_adapter_config(Medusa.Adapter.RabbitMQ)
       Process.register(self, :self)
       :ok
     end
