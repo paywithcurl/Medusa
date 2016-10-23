@@ -47,15 +47,15 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, state}
   end
 
-  def handle_info({:basic_consume_ok, %{consumer_tag: consumer_tag}}, state) do
+  def handle_info({:basic_consume_ok, %{consumer_tag: _consumer_tag}}, state) do
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel, %{consumer_tag: consumer_tag}}, state) do
+  def handle_info({:basic_cancel, %{consumer_tag: _consumer_tag}}, state) do
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_cancel_ok, %{consumer_tag: consumer_tag}}, state) do
+  def handle_info({:basic_cancel_ok, %{consumer_tag: _consumer_tag}}, state) do
     {:noreply, state}
   end
 
@@ -69,7 +69,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, _, :process, pid, reason}, %{channel: %{pid: pid, conn: conn}}) do
+  def handle_info({:DOWN, _, :process, pid, _reason}, %{channel: %{pid: pid, conn: conn}}) do
      state =
        case Process.alive?(conn.pid) do
          true -> init_channel(conn)
@@ -84,11 +84,11 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   defp init_connection do
-    # FIXME connection url
-    case Connection.open do
+    connection_opts = config(:connection, [])
+    case Connection.open(connection_opts) do
       {:ok, conn} ->
         init_channel(conn)
-      {:error, error} ->
+      {:error, _error} ->
         Process.sleep(10_000)
         init_connection()
     end
@@ -98,6 +98,8 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:ok, chan} = Channel.open(conn)
     Process.monitor(chan.pid)
     :ok = Basic.qos(chan, prefetch_count: 1)
+    queue_name = config(:queue_name, "")
+    queue_opts = queue_opts(queue_name)
     {:ok, _queue} = Queue.declare(chan, queue_name, queue_opts)
     :ok = Exchange.fanout(chan, @exchange_name, durable: true)
     :ok = Queue.bind(chan, queue_name, @exchange_name)
@@ -105,13 +107,14 @@ defmodule Medusa.Adapter.RabbitMQ do
     %__MODULE__{channel: chan}
   end
 
-  defp queue_name do
+  defp config(name, default) do
     :medusa
     |> Application.get_env(Medusa)
-    |> Keyword.get(:rabbitmq_queue, "")
+    |> get_in([:RabbitMQ, name])
+    |> Kernel.||(default)
   end
 
-  defp queue_opts do
+  defp queue_opts(queue_name) do
     case queue_name do
       "" -> [exclusive: true]
       _ -> [durable: true]
