@@ -43,7 +43,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   def handle_call({:publish, event, payload}, _from, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
     message = %Message{event: event, message: payload} |> Poison.encode!
-    AMQP.Basic.publish(state.channel, @exchange_name, "", message)
+    AMQP.Basic.publish(state.channel, @exchange_name, "", message, persistent: true)
     {:noreply, state}
   end
 
