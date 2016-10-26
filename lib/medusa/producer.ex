@@ -31,7 +31,7 @@ defmodule Medusa.Producer do
     {:automatic, new_state}
   end
 
-  def handle_cancel({:down, _reason, _process}, state) do
+  def handle_cancel({:down, _reason, _process}, _from, state) do
      {:noreply, [], state}
   end
 
