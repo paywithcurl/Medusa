@@ -31,6 +31,10 @@ defmodule Medusa.Producer do
     {:automatic, new_state}
   end
 
+  def handle_cancel({:down, _reason, _process}, state) do
+     {:noreply, [], state}
+  end
+
   def handle_cancel(_reason, {pid, _ref}, %{consumers: consumers} = state) do
     cond do
       MapSet.member?(consumers, pid) && MapSet.size(consumers) == 1 ->
@@ -42,6 +46,7 @@ defmodule Medusa.Producer do
         {:noreply, [], state}
     end
   end
+
   def handle_cancel(_reason, _from, state) do
     {:noreply, [], state}
   end
