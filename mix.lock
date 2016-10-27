@@ -2,5 +2,5 @@
   "amqp_client": {:git, "https://github.com/dsrosario/amqp_client.git", "3b3086534875c783803fcef7c5befaddd57a4561", [branch: "erlang_otp_19"]},
   "connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [:mix], []},
   "gen_stage": {:hex, :gen_stage, "0.4.3", "721a82a6c3de8438435ef1970d4942865afef5befb6f318055724b171860a8b4", [:mix], []},
-  "poison": {:hex, :poison, "2.0.1", "81248a36d1b602b17ea6556bfa8952492091f01af05173de11f8b297e2bbf088", [:mix], []},
+  "poison": {:hex, :poison, "2.2.0", "4763b69a8a77bd77d26f477d196428b741261a761257ff1cf92753a0d4d24a63", [:mix], []},
   "rabbit_common": {:git, "https://github.com/jbrisbin/rabbit_common.git", "eea16abd375981d16595d2cefaac893c7281187b", [tag: "rabbitmq-3.5.6"]}}
