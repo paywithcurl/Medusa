@@ -1,8 +1,7 @@
 defmodule Medusa.Adapter.RabbitMQ do
   @moduledoc false
   @behaviour Medusa.Adapter
-  use GenServer
-  use AMQP
+  use Connection
   require Logger
   alias Medusa.Broker
 
@@ -15,7 +14,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   @exchange_name "medusa"
 
   def start_link do
-    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+    Connection.start_link(__MODULE__, [], name: __MODULE__)
   end
 
   def new_route(event) do
@@ -27,8 +26,17 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def init([]) do
-    connection = init_connection()
-    {:ok, connection}
+    {:connect, :init, %__MODULE__{}}
+  end
+
+  def connect(_, state) do
+    connection_opts = config(:connection, [])
+    case AMQP.Connection.open(connection_opts) do
+      {:ok, conn} ->
+        {:ok, %{state | channel: setup_channel(conn)}}
+      {:error, error} ->
+        {:backoff, 1_000, state}
+    end
   end
 
   def handle_call({:new_route, event}, _from, state) do
@@ -65,17 +73,15 @@ defmodule Medusa.Adapter.RabbitMQ do
     message = Map.fetch!(msg, "message")
     message = %Broker.Message{body: message["body"], metadata: message["metadata"]}
     Enum.each(state.routes, &Broker.maybe_route({&1, event, message}))
-    Basic.ack(state.channel, tag)
+    AMQP.Basic.ack(state.channel, tag)
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, _, :process, pid, _reason}, %{channel: %{pid: pid, conn: conn}}) do
-     state =
-       case Process.alive?(conn.pid) do
-         true -> init_channel(conn)
-         false -> init_connection()
-       end
-    {:noreply, state}
+  def handle_info({:DOWN, _, :process, pid, _reason}, %{channel: %{pid: pid, conn: conn}} = state) do
+    case Process.alive?(conn.pid) do
+      true -> {:noreply, %{state | channel: setup_channel(conn)}}
+      false -> {:connect, :reconnect, state}
+    end
   end
 
   def handle_info(msg, state) do
@@ -83,28 +89,17 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, state}
   end
 
-  defp init_connection do
-    connection_opts = config(:connection, [])
-    case Connection.open(connection_opts) do
-      {:ok, conn} ->
-        init_channel(conn)
-      {:error, _error} ->
-        Process.sleep(10_000)
-        init_connection()
-    end
-  end
-
-  defp init_channel(conn) do
-    {:ok, chan} = Channel.open(conn)
+  defp setup_channel(conn) do
+    {:ok, chan} = AMQP.Channel.open(conn)
     Process.monitor(chan.pid)
-    :ok = Basic.qos(chan, prefetch_count: 1)
+    :ok = AMQP.Basic.qos(chan, prefetch_count: 1)
     queue_name = config(:queue_name, "")
     queue_opts = queue_opts(queue_name)
-    {:ok, _queue} = Queue.declare(chan, queue_name, queue_opts)
-    :ok = Exchange.fanout(chan, @exchange_name, durable: true)
-    :ok = Queue.bind(chan, queue_name, @exchange_name)
-    {:ok, _consume} = Basic.consume(chan, queue_name)
-    %__MODULE__{channel: chan}
+    {:ok, _queue} = AMQP.Queue.declare(chan, queue_name, queue_opts)
+    :ok = AMQP.Exchange.fanout(chan, @exchange_name, durable: true)
+    :ok = AMQP.Queue.bind(chan, queue_name, @exchange_name)
+    {:ok, _consume} = AMQP.Basic.consume(chan, queue_name)
+    chan
   end
 
   defp config(name, default) do
