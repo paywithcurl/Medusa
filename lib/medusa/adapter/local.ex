@@ -1,39 +1,34 @@
 defmodule Medusa.Adapter.Local do
-  use GenServer
+  @moduledoc false
   @behaviour Medusa.Adapter
+  use GenServer
   require Logger
+  alias Medusa.Broker
 
-  def start_link() do
+  def start_link do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def insert(type, payload) do
-    Logger.debug "#{inspect __MODULE__}: insert #{inspect payload} on #{inspect type}"
-    GenServer.cast __MODULE__, {:insert, type, payload}
+  def new_route(event) do
+    GenServer.call(__MODULE__, {:new_route, event})
   end
 
-  def next(type) do
-    Logger.debug "#{inspect __MODULE__}: next from #{inspect type}"
-    GenServer.call __MODULE__, {:next, type}
+  def publish(event, message) do
+    GenServer.cast(__MODULE__, {:publish, event, message})
   end
 
-  def init(_args) do
-    {:ok, %{}}
+  def init(_opts) do
+    {:ok, MapSet.new}
   end
 
-  def handle_call({:next, type}, _from, state) do
-    case Map.get(state, type) do
-      :nil -> {:reply, [], state}
-      q ->
-        case :queue.out q do
-          {{:value, i}, q} -> {:reply, i, Map.put(state, type, q)}
-          {:empty, q} -> {:reply, [], Map.put(state, type, q)}
-        end
-    end
+  def handle_call({:new_route, event}, _from, state) do
+    Logger.debug "#{inspect __MODULE__}: [#{inspect event}]"
+    {:reply, :ok, MapSet.put(state, event)}
   end
 
-  def handle_cast({:insert, type, payload}, state) do
-    {:noreply, Map.update(state, type, :queue.in(payload, :queue.new), fn q -> :queue.in(payload, q) end)}
+  def handle_cast({:publish, event, payload}, state) do
+    Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
+    Enum.each(state, &Broker.maybe_route({&1, event, payload}))
+    {:noreply, state}
   end
-
 end
