@@ -32,12 +32,14 @@ defmodule Medusa do
 
   def start(_type, _args) do
     ensure_config_correct()
-    children = [
-      child_adapter(),
-      worker(Medusa.Queue, []),
-      supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
-      supervisor(Medusa.ProducerConsumerSupervisor, [])
-    ]
+    children =
+      [
+        child_adapter(),
+        child_queue(),
+        supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
+        supervisor(Medusa.ProducerConsumerSupervisor, [])
+      ]
+      |> List.flatten
 
     opts = [strategy: :one_for_one, name: Medusa.Supervisor]
     Supervisor.start_link(children, opts)
@@ -74,6 +76,13 @@ defmodule Medusa do
   defp child_adapter do
     adapter
     |> worker([])
+  end
+
+  defp child_queue do
+    case adapter do
+      Medusa.Adapter.PG2 -> worker(Medusa.Queue, [])
+      _ -> []
+    end
   end
 
   defp ensure_config_correct do
