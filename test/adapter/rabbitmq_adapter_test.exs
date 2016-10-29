@@ -28,6 +28,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     {:ok, chan: chan, queue_name: queue_name, config: config}
   end
 
+  @tag :rabbitmq
   test "config queue_name should crate on RabbitMQ server",
         %{chan: chan, queue_name: queue_name, config: config} do
     Application.put_env(:medusa, Medusa, config)

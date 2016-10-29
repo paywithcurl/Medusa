@@ -1,4 +1,4 @@
-defmodule Medusa.Supervisors.Consumers do
+defmodule Medusa.ConsumerSupervisor do
   @moduledoc false
   use Supervisor
 
@@ -8,14 +8,20 @@ defmodule Medusa.Supervisors.Consumers do
 
   def init(_args) do
     children = [
-      worker(Medusa.Consumer, [], restart: :transient)
+      worker(consumer_module(), [], restart: :transient)
     ]
 
     supervise(children, strategy: :simple_one_for_one)
   end
 
   def start_child(f, to_link, opts \\ []) do
-    to_link = String.to_atom to_link
+    to_link = String.to_atom(to_link)
     Supervisor.start_child(__MODULE__, [[function: f, to_link: to_link, opts: opts]])
   end
+
+  defp consumer_module do
+    [_, _, adapter] = Medusa.adapter |> Module.split
+    ["Medusa", "Consumer", adapter] |> Module.concat
+  end
+
 end

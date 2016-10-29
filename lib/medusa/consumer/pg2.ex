@@ -1,10 +1,10 @@
-defmodule Medusa.Consumer do
-  alias Experimental.GenStage
+alias Experimental.GenStage
+
+defmodule Medusa.Consumer.PG2 do
   use GenStage
   require Logger
 
   def start_link(args) do
-    Logger.debug "Starting Consumer for: #{inspect args}"
     params = %{
       function: Keyword.fetch!(args, :function),
       to_link: Keyword.fetch!(args, :to_link),
@@ -14,6 +14,7 @@ defmodule Medusa.Consumer do
   end
 
   def init(%{to_link: link} = params) do
+    Logger.debug("Starting #{__MODULE__} for: #{inspect params}")
     {:consumer, params, subscribe_to: [link]}
   end
 
@@ -21,7 +22,7 @@ defmodule Medusa.Consumer do
   Process the event passing the argument to the function.
   """
   def handle_events(events, _from, state) do
-    Logger.debug "Received event: #{inspect events}"
+    Logger.debug("#{__MODULE__} Received event: #{inspect events}")
     events
     |> List.flatten
     |> do_handle_events(state)
@@ -30,6 +31,7 @@ defmodule Medusa.Consumer do
   defp do_handle_events([], state) do
     {:noreply, [], state}
   end
+
   defp do_handle_events(events, %{function: f, opts: opts} = state) do
     Enum.each(events, &f.(&1))
     if opts[:bind_once] do

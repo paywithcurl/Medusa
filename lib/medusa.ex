@@ -3,10 +3,9 @@ defmodule Medusa do
   require Logger
   import Supervisor.Spec, warn: false
 
-  @available_adapters [Medusa.Adapter.Local,
-                       Medusa.Adapter.PG2,
+  @available_adapters [Medusa.Adapter.PG2,
                        Medusa.Adapter.RabbitMQ]
-  @default_adapter Medusa.Adapter.Local
+  @default_adapter Medusa.Adapter.PG2
 
   @moduledoc """
   Medusa is a Pub/Sub system that leverages GenStage.
@@ -34,11 +33,10 @@ defmodule Medusa do
   def start(_type, _args) do
     ensure_config_correct()
     children = [
-      child_broker(),
+      child_adapter(),
       worker(Medusa.Queue, []),
       supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
-      supervisor(Medusa.Supervisors.Producers, []),
-      supervisor(Medusa.Supervisors.Consumers, [])
+      supervisor(Medusa.ProducerConsumerSupervisor, [])
     ]
 
     opts = [strategy: :one_for_one, name: Medusa.Supervisor]
@@ -51,18 +49,30 @@ defmodule Medusa do
     # Register an route on the Broker
     Medusa.Broker.new_route(route)
 
-    Medusa.Supervisors.Producers.start_child(route)
-    Medusa.Supervisors.Consumers.start_child(function, route, opts)
+    with {:ok, producer} <- Medusa.ProducerSupervisor.start_child(route),
+         {:ok, consumer} <- Medusa.ConsumerSupervisor.start_child(function, route, opts) do
+      {:ok, %{consumer: consumer, producer: producer}}
+    else
+      {:error, {:already_started, producer}} ->
+         {:ok, consumer} = Medusa.ConsumerSupervisor.start_child(function, route, opts)
+         {:ok, %{consumer: consumer, producer: producer}}
+      error ->
+        {:error, error}
+    end
   end
 
   def publish(event, payload, metadata \\ %{}) do
     Medusa.Broker.publish event, payload, metadata
   end
 
-  defp child_broker do
+  def adapter do
     :medusa
     |> Application.get_env(Medusa)
     |> Keyword.fetch!(:adapter)
+  end
+
+  defp child_adapter do
+    adapter
     |> worker([])
   end
 
