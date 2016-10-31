@@ -40,7 +40,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
           consumer and producer should die" do
       assert consumer_children() == []
       assert producer_children() == []
-      assert Medusa.consume("rabbit.bind1", &MyModule.echo/1, bind_once: true) == :ok
+      {:ok, _} =  Medusa.consume("rabbit.bind1", &MyModule.echo/1, bind_once: true)
       [{_, consumer, _, _}] = consumer_children()
       [{_, producer, _, _}] = producer_children()
       Process.sleep(100) # wait RabbitMQ connection
@@ -58,8 +58,8 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "Send event to consumer with bind_once: true should not kill other producer-consumer" do
       assert consumer_children() == []
       assert producer_children() == []
-      assert Medusa.consume("rabbit.bind2", &MyModule.echo/1) == :ok
-      assert Medusa.consume("rabbit.bind2", &MyModule.echo/1, bind_once: true) == :ok
+      {:ok, _} = Medusa.consume("rabbit.bind2", &MyModule.echo/1)
+      {:ok, _} = Medusa.consume("rabbit.bind2", &MyModule.echo/1, bind_once: true)
       Process.sleep(100) # wait RabbitMQ connection
       assert length(consumer_children()) == 2
       assert length(producer_children()) == 2

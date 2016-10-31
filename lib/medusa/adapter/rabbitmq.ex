@@ -50,10 +50,10 @@ defmodule Medusa.Adapter.RabbitMQ do
     Logger.debug("#{__MODULE__}: new route #{inspect event}")
     with {:ok, p} <- Producer.start_child(event, function: function),
          {:ok, _} <- Consumer.start_child(function, p, opts) do
-      {:reply, :ok, state}
+      {:reply, {:ok, p}, state}
     else
-      {:error, {:already_started, _}} ->
-        {:reply, :ok, state}
+      {:error, {:already_started, p}} ->
+        {:reply, {:ok, p}, state}
       error ->
         Logger.error("#{__MODULE__} new_route: #{inspect error}")
         {:reply, :error, state}
