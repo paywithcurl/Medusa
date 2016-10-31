@@ -5,9 +5,14 @@ defmodule Medusa.Adapter do
   The objective of having this adapter is to be able to switch them if
   you have specific requirements, such as: using Redis, RabbitMQ, AQMP.
   """
-  alias Medusa.Broker.Message
 
-  @callback new_route(event :: String.t) :: :ok | :error
-  @callback publish(event :: String.t, message :: Message) :: :ok | :error
+  @type event :: String.t
+  @type fun :: (Medusa.Broker.Message.t -> any)
+  @type message :: Medusa.Broker.Message.t
+  @type opts :: Keyword.t
+  @type response :: :ok | {:ok, any} | :error | {:error, any}
+
+  @callback new_route(event, fun, opts) :: response
+  @callback publish(event, message) :: response
 
 end

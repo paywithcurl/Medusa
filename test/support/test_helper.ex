@@ -12,6 +12,14 @@ defmodule Medusa.TestHelper do
     restart_app()
   end
 
+  def consumer_children do
+    Supervisor.which_children(Medusa.ConsumerSupervisor)
+  end
+
+  def producer_children do
+    Supervisor.which_children(Medusa.ProducerSupervisor)
+  end
+
 end
 
 defmodule MyModule do

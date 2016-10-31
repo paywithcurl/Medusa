@@ -51,7 +51,7 @@ defmodule Medusa do
   end
 
   def publish(event, payload, metadata \\ %{}) do
-    Medusa.Broker.publish event, payload, metadata
+    Medusa.Broker.publish(event, payload, metadata)
   end
 
   def adapter do

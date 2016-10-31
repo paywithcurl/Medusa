@@ -1,6 +1,8 @@
 defmodule Medusa.Broker do
   @moduledoc false
   alias Medusa.Queue
+  alias Medusa.ProducerSupervisor, as: Producer
+  alias Medusa.ConsumerSupervisor, as: Consumer
 
   defmodule Message do
     defstruct body: %{}, metadata: %{}
@@ -23,14 +25,12 @@ defmodule Medusa.Broker do
   end
 
   @doc """
-  Start producer is start
+  Start producer and consumer and subscribe
   """
-  def start_producer(event, opts \\ []) do
-    case Producer.start_child(event, opts) do
-      {:ok, pid} when is_pid(pid) -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, error} -> {:error, error}
-    end
+  def start_producer_consumer(event, function, opts) do
+    {:ok, producer} = ensure_producer_started(event)
+    {:ok, consumer} = Consumer.start_child(function, event, opts)
+    {producer, consumer}
   end
 
   @doc """
@@ -62,11 +62,20 @@ defmodule Medusa.Broker do
   when is_binary(route) and is_binary(incoming) do
     route = String.split(route, ".")
     incoming = String.split(incoming, ".")
-    route_match?(route, incoming)
+    do_route_match?(route, incoming)
   end
-  defp route_match?([], []), do: true
-  defp route_match?(["*"|t1], [_|t2]), do: route_match?(t1, t2)
-  defp route_match?([h|t1], [h|t2]), do: route_match?(t1, t2)
-  defp route_match?(_, _), do: false
+
+  defp do_route_match?([], []), do: true
+  defp do_route_match?(["*"|t1], [_|t2]), do: do_route_match?(t1, t2)
+  defp do_route_match?([h|t1], [h|t2]), do: do_route_match?(t1, t2)
+  defp do_route_match?(_, _), do: false
+
+  defp ensure_producer_started(event) do
+    case Producer.start_child(event) do
+      {:ok, pid} when is_pid(pid) -> {:ok, pid}
+      {:error, {:already_started, pid}} when is_pid(pid) -> {:ok, pid}
+      {:error, error} -> {:error, error}
+    end
+  end
 
 end

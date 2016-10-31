@@ -19,7 +19,11 @@ defmodule MedusaTest do
   end
 
   test "Add consumers" do
-    assert {:ok, _pid} = Medusa.consume("foo.bob", &IO.puts/1)
+    before = Medusa.ConsumerSupervisor |> Supervisor.which_children |> length
+    Medusa.consume("foo.bob", &IO.puts/1)
+    afters = Medusa.ConsumerSupervisor |> Supervisor.which_children |> length
+    assert afters - before == 1
+    assert Process.whereis(:"foo.bob")
   end
 
   test "Add invalid consumer" do

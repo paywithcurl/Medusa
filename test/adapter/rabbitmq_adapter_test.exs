@@ -1,38 +1,75 @@
 defmodule Medusa.Adapter.RabbitMQTest do
   use ExUnit.Case, async: true
+  import Medusa.TestHelper
+  alias Medusa.Broker.Message
 
   setup do
-    {:ok, conn} = AMQP.Connection.open()
-    {:ok, chan} = AMQP.Channel.open(conn)
-    queue_name = "test_queue_name"
-    config = [
-      adapter: Medusa.Adapter.RabbitMQ,
-      RabbitMQ: [
-        connection: [
-          username: "guest",
-          password: "guest",
-          virtual_host: "/",
-          host: "localhost",
-          port: :undefined
-        ],
-        queue_name: queue_name
-      ]
-    ]
-
-    on_exit fn ->
-      Application.stop(:medusa)
-      AMQP.Queue.delete(chan, queue_name)
-      Application.ensure_all_started(:medusa)
-    end
-
-    {:ok, chan: chan, queue_name: queue_name, config: config}
+    Process.register(self, :self)
+    :ok
   end
 
-  @tag :rabbitmq
-  test "config queue_name should crate on RabbitMQ server",
-        %{chan: chan, queue_name: queue_name, config: config} do
-    Application.put_env(:medusa, Medusa, config)
-    assert {:ok, _} = AMQP.Queue.declare(chan, queue_name, passive: true)
+  describe "RabbitMQ" do
+
+    setup do
+      put_adapter_config(Medusa.Adapter.RabbitMQ)
+      :ok
+    end
+
+    @tag :rabbitmq
+    test "Send events" do
+      Medusa.consume("foo.bar", &MyModule.echo/1)
+      Medusa.consume("foo.*", &MyModule.echo/1)
+      Medusa.consume("foo.baz", &MyModule.echo/1)
+      Process.sleep(100) # wait RabbitMQ connection
+      Medusa.publish("foo.bar", "foobar", %{"optional_field" => "nice_to_have"})
+      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
+      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
+      refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
+    end
+
+    @tag :rabbitmq
+    test "Send non-match events" do
+      Medusa.consume("ping.pong", &MyModule.echo/1)
+      Process.sleep(100) # wait RabbitMQ connection
+      Medusa.publish("ping", "ping")
+      refute_receive %Message{body: "ping"}
+    end
+
+    @tag :rabbitmq
+    test "Send event to consumer with bind_once: true.
+          consumer and producer should die" do
+      assert consumer_children() == []
+      assert producer_children() == []
+      assert Medusa.consume("rabbit.bind1", &MyModule.echo/1, bind_once: true) == :ok
+      [{_, consumer, _, _}] = consumer_children()
+      [{_, producer, _, _}] = producer_children()
+      Process.sleep(100) # wait RabbitMQ connection
+      assert Process.alive?(consumer)
+      assert Process.alive?(producer)
+      ref_consumer = Process.monitor(consumer)
+      ref_producer = Process.monitor(producer)
+      Medusa.publish("rabbit.bind1", "die both")
+      assert_receive %Message{body: "die both"}
+      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}
+      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}
+    end
+
+    @tag :rabbitmq
+    test "Send event to consumer with bind_once: true should not kill other producer-consumer" do
+      assert consumer_children() == []
+      assert producer_children() == []
+      assert Medusa.consume("rabbit.bind2", &MyModule.echo/1) == :ok
+      assert Medusa.consume("rabbit.bind2", &MyModule.echo/1, bind_once: true) == :ok
+      Process.sleep(100) # wait RabbitMQ connection
+      assert length(consumer_children()) == 2
+      assert length(producer_children()) == 2
+      Medusa.publish("rabbit.bind2", "only con2, prod2 die")
+      assert_receive %Message{body: "only con2, prod2 die"}
+      assert_receive %Message{body: "only con2, prod2 die"}
+      Process.sleep(10)
+      assert length(consumer_children()) == 1
+      assert length(producer_children()) == 1
+    end
   end
 
 end

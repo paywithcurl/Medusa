@@ -26,7 +26,7 @@ defmodule Medusa.Producer.RabbitMQ do
     get_next_event(%{state | demand: demand})
   end
 
-  def handle_subscribe(:consumer, _opts, {pid, _ref}, state) do
+  def handle_subscribe(:consumer, _opts, _from, state) do
     {:automatic, state}
   end
 
@@ -34,7 +34,7 @@ defmodule Medusa.Producer.RabbitMQ do
      {:noreply, [], state}
   end
 
-  def handle_cancel(reason, {pid, _ref}, state) do
+  def handle_cancel(_reason, _from, state) do
     close_connection(state.channel.conn)
     {:stop, :normal, state}
   end
@@ -43,16 +43,16 @@ defmodule Medusa.Producer.RabbitMQ do
     {:noreply, [], state}
   end
 
-  def handle_info({:basic_consume_ok, %{consumer_tag: _consumer_tag}}, state) do
+  def handle_info({:basic_consume_ok, _meta}, state) do
     {:noreply, [], state}
   end
 
-  def handle_info({:basic_cancel, %{consumer_tag: _consumer_tag}}, state) do
+  def handle_info({:basic_cancel, _meta}, state) do
     close_connection(state.channel.conn)
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_cancel_ok, %{consumer_tag: _consumer_tag}}, state) do
+  def handle_info({:basic_cancel_ok, _meta}, state) do
     {:noreply, [], state}
   end
 
@@ -67,9 +67,6 @@ defmodule Medusa.Producer.RabbitMQ do
     {:noreply, [message], %{state | demand: state.demand - 1}}
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, :normal}, state) do
-    {:stop, :normal, state}
-  end
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
     close_connection(state.channel.conn)
     new_channel = setup_channel(state.topic, state.queue_name)

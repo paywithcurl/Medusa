@@ -3,7 +3,6 @@ defmodule Medusa.Adapter.RabbitMQ do
   @behaviour Medusa.Adapter
   use Connection
   require Logger
-  alias Medusa.Broker
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
 
@@ -38,6 +37,7 @@ defmodule Medusa.Adapter.RabbitMQ do
         Process.monitor(conn.pid)
         {:ok, %{state | connection: conn, channel: setup_channel(conn)}}
       {:error, error} ->
+        Logger.warn("#{__MODULE__} connect: #{inspect error}")
         {:backoff, 1_000, %{state | connection: nil}}
     end
   end
@@ -61,7 +61,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_call({:publish, event, payload}, _from, state) do
-    Logger.debug("#{__MODULE__}: [#{inspect event}]: #{inspect payload}")
+    Logger.debug("#{__MODULE__}: publish #{inspect event}: #{inspect payload}")
     message = Poison.encode!(payload)
     AMQP.Basic.publish(state.channel,
                        @exchange_name,
@@ -71,19 +71,19 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:reply, :ok, state}
   end
 
-  def handle_info({:basic_consume_ok, %{consumer_tag: _consumer_tag}}, state) do
+  def handle_info({:basic_consume_ok, _meta}, state) do
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel, %{consumer_tag: _consumer_tag}}, state) do
+  def handle_info({:basic_cancel, _meta}, state) do
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_cancel_ok, %{consumer_tag: _consumer_tag}}, state) do
+  def handle_info({:basic_cancel_ok, _meta}, state) do
     {:noreply, state}
   end
 
-  def handle_info({:basic_deliver, payload, %{delivery_tag: tag}}, state) do
+  def handle_info({:basic_deliver, _payload, _meta}, state) do
     {:noreply, state}
   end
 
