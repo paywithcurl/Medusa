@@ -10,8 +10,8 @@ defmodule Medusa.Broker do
   Adds a new route to the broker. If there is an existing route,
   it just ignores it.
   """
-  def new_route(event) do
-    adapter.new_route(event)
+  def new_route(event, function, opts) do
+    Medusa.adapter.new_route(event, function, opts)
   end
 
   @doc """
@@ -19,7 +19,18 @@ defmodule Medusa.Broker do
   """
   def publish(event, payload, metadata \\ %{}) do
     message = %Message{body: payload, metadata: metadata}
-    adapter.publish(event, message)
+    Medusa.adapter.publish(event, message)
+  end
+
+  @doc """
+  Start producer is start
+  """
+  def start_producer(event, opts \\ []) do
+    case Producer.start_child(event, opts) do
+      {:ok, pid} when is_pid(pid) -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, error} -> {:error, error}
+    end
   end
 
   @doc """
@@ -57,9 +68,5 @@ defmodule Medusa.Broker do
   defp route_match?(["*"|t1], [_|t2]), do: route_match?(t1, t2)
   defp route_match?([h|t1], [h|t2]), do: route_match?(t1, t2)
   defp route_match?(_, _), do: false
-
-  defp adapter do
-    :medusa |> Application.get_env(Medusa) |> Keyword.fetch!(:adapter)
-  end
 
 end

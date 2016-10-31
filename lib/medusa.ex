@@ -47,20 +47,7 @@ defmodule Medusa do
 
   def consume(route, function, opts \\ []) do
     {_, 1} =  :erlang.fun_info(function, :arity)
-
-    # Register an route on the Broker
-    Medusa.Broker.new_route(route)
-
-    with {:ok, producer} <- Medusa.ProducerSupervisor.start_child(route),
-         {:ok, consumer} <- Medusa.ConsumerSupervisor.start_child(function, route, opts) do
-      {:ok, %{consumer: consumer, producer: producer}}
-    else
-      {:error, {:already_started, producer}} ->
-         {:ok, consumer} = Medusa.ConsumerSupervisor.start_child(function, route, opts)
-         {:ok, %{consumer: consumer, producer: producer}}
-      error ->
-        {:error, error}
-    end
+    Medusa.Broker.new_route(route, function, opts)
   end
 
   def publish(event, payload, metadata \\ %{}) do

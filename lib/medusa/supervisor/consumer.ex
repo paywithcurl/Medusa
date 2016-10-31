@@ -15,7 +15,12 @@ defmodule Medusa.ConsumerSupervisor do
   end
 
   def start_child(f, to_link, opts \\ []) do
-    to_link = String.to_atom(to_link)
+    to_link =
+      cond do
+        is_binary(to_link) -> String.to_atom(to_link)
+        is_pid(to_link) -> to_link
+        is_atom(to_link) -> to_link
+      end
     Supervisor.start_child(__MODULE__, [[function: f, to_link: to_link, opts: opts]])
   end
 

@@ -14,8 +14,9 @@ defmodule Medusa.ProducerSupervisor do
     supervise(children, strategy: :simple_one_for_one)
   end
 
-  def start_child(topic) do
-    Supervisor.start_child(__MODULE__, [[name: topic]])
+  def start_child(topic, opts \\ []) do
+    opts = Keyword.merge(opts, name: topic)
+    Supervisor.start_child(__MODULE__, [opts])
   end
 
   def producer_module do
