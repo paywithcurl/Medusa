@@ -56,7 +56,7 @@ defmodule Medusa.Adapter.RabbitMQ do
         {:reply, {:ok, p}, state}
       error ->
         Logger.error("#{__MODULE__} new_route: #{inspect error}")
-        {:reply, :error, state}
+        {:reply, {:error, error} state}
     end
   end
 

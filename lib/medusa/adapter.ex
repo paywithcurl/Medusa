@@ -10,9 +10,8 @@ defmodule Medusa.Adapter do
   @type fun :: (Medusa.Broker.Message.t -> any)
   @type message :: Medusa.Broker.Message.t
   @type opts :: Keyword.t
-  @type response :: :ok | {:ok, any} | :error | {:error, any}
 
-  @callback new_route(event, fun, opts) :: response
-  @callback publish(event, message) :: response
+  @callback new_route(event, fun, opts) :: {:ok, any} | {:error, any}
+  @callback publish(event, message) :: :ok | :error
 
 end
