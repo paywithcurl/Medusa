@@ -4,6 +4,7 @@ defmodule Medusa.Producer.RabbitMQ do
   use GenStage
   require Logger
   alias Medusa.Broker.Message
+  alias Message.Adapter.RabbitMQ, as: Adapter
 
   defstruct demand: 0, channel: nil, consumer_tag: nil, topic: nil, queue_name: nil
 
@@ -57,14 +58,19 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info({:basic_deliver, payload, %{delivery_tag: tag}}, state) do
-    msg = Poison.decode!(payload)
-    message = %Message{body: msg["body"], metadata: msg["metadata"]}
-    info = %{"channel" => state.channel, "delivery_tag" => tag}
-    message = Map.update(message,
-                         :metadata,
-                         info,
-                         &Map.merge(&1, info))
-    {:noreply, [message], %{state | demand: state.demand - 1}}
+    case Poison.decode(payload) do
+      {:ok, msg} ->
+        message = %Message{body: msg["body"], metadata: msg["metadata"]}
+        info = %{"channel" => state.channel, "delivery_tag" => tag}
+        message = Map.update(message,
+                             :metadata,
+                             info,
+                             &Map.merge(&1, info))
+        {:noreply, [message], %{state | demand: state.demand - 1}}
+      _ ->
+        AMQP.Basic.reject(state.channel, tag, requeue: false)
+        {:noreply, [], state}
+    end
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
@@ -92,8 +98,8 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   defp setup_channel(topic, queue_name) do
-    with exchange when is_binary(exchange) <- Medusa.Adapter.RabbitMQ.exchange(),
-         {:ok, conn} <- AMQP.Connection.open(),
+    with exchange when is_binary(exchange) <- Adapter.exchange(),
+         {:ok, conn} <- AMQP.Connection.open(Adapter.connection_opts),
          {:ok, chan} <- AMQP.Channel.open(conn),
          :ok <- AMQP.Exchange.topic(chan, exchange, durable: true),
          :ok <- AMQP.Basic.qos(chan, prefetch_count: 1),

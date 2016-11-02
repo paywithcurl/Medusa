@@ -63,13 +63,17 @@ defmodule Medusa.Adapter.RabbitMQ do
   def handle_call({:publish, event, payload}, _from, %{channel: chan} = state)
   when not is_nil(chan) do
     Logger.debug("#{__MODULE__}: publish #{inspect event}: #{inspect payload}")
-    message = Poison.encode!(payload)
-    AMQP.Basic.publish(state.channel,
-                       @exchange_name,
-                       event,
-                       message,
-                       persistent: true)
-    {:reply, :ok, state}
+    case Poison.encode(payload) do
+      {:ok, message} ->
+        AMQP.Basic.publish(state.channel,
+                           @exchange_name,
+                           event,
+                           message,
+                           persistent: true)
+        {:reply, :ok, state}
+      _ ->
+        {:reply, :error, state}
+    end
   end
 
   def handle_call({:publish, _, _}, _from, state) do
@@ -113,7 +117,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     chan
   end
 
-  defp connection_opts do
+  def connection_opts do
     :medusa
     |> Application.get_env(Medusa)
     |> get_in([:RabbitMQ, :connection])
