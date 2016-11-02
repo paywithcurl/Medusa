@@ -4,7 +4,7 @@ defmodule Medusa.Producer.RabbitMQ do
   use GenStage
   require Logger
   alias Medusa.Broker.Message
-  alias Message.Adapter.RabbitMQ, as: Adapter
+  alias Medusa.Adapter.RabbitMQ, as: Adapter
 
   defstruct demand: 0, channel: nil, consumer_tag: nil, topic: nil, queue_name: nil
 
