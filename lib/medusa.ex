@@ -3,10 +3,9 @@ defmodule Medusa do
   require Logger
   import Supervisor.Spec, warn: false
 
-  @available_adapters [Medusa.Adapter.Local,
-                       Medusa.Adapter.PG2,
+  @available_adapters [Medusa.Adapter.PG2,
                        Medusa.Adapter.RabbitMQ]
-  @default_adapter Medusa.Adapter.Local
+  @default_adapter Medusa.Adapter.PG2
 
   @moduledoc """
   Medusa is a Pub/Sub system that leverages GenStage.
@@ -33,13 +32,14 @@ defmodule Medusa do
 
   def start(_type, _args) do
     ensure_config_correct()
-    children = [
-      child_broker(),
-      worker(Medusa.Queue, []),
-      supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
-      supervisor(Medusa.Supervisors.Producers, []),
-      supervisor(Medusa.Supervisors.Consumers, [])
-    ]
+    children =
+      [
+        child_adapter(),
+        child_queue(),
+        supervisor(Task.Supervisor, [[name: Broker.Supervisor]]),
+        supervisor(Medusa.ProducerConsumerSupervisor, [])
+      ]
+      |> List.flatten
 
     opts = [strategy: :one_for_one, name: Medusa.Supervisor]
     Supervisor.start_link(children, opts)
@@ -47,23 +47,29 @@ defmodule Medusa do
 
   def consume(route, function, opts \\ []) do
     {_, 1} =  :erlang.fun_info(function, :arity)
-
-    # Register an route on the Broker
-    Medusa.Broker.new_route(route)
-
-    Medusa.Supervisors.Producers.start_child(route)
-    Medusa.Supervisors.Consumers.start_child(function, route, opts)
+    Medusa.Broker.new_route(route, function, opts)
   end
 
   def publish(event, payload, metadata \\ %{}) do
-    Medusa.Broker.publish event, payload, metadata
+    Medusa.Broker.publish(event, payload, metadata)
   end
 
-  defp child_broker do
+  def adapter do
     :medusa
     |> Application.get_env(Medusa)
     |> Keyword.fetch!(:adapter)
+  end
+
+  defp child_adapter do
+    adapter
     |> worker([])
+  end
+
+  defp child_queue do
+    case adapter do
+      Medusa.Adapter.PG2 -> worker(Medusa.Queue, [])
+      _ -> []
+    end
   end
 
   defp ensure_config_correct do
