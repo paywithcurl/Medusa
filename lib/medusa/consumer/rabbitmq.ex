@@ -34,10 +34,21 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_handle_events(events, %{function: f, opts: opts} = state) do
     Enum.each(events, fn event ->
-      f.(event)
+      result =
+        try do
+          f.(event)
+        rescue
+          error ->
+            Logger.error("#{__MODULE__} event: #{inspect event} #{inspect error}")
+            :error
+        end
       with %AMQP.Channel{} = chan <- event.metadata["channel"],
            tag when is_number(tag) <- event.metadata["delivery_tag"] do
-        AMQP.Basic.ack(chan, tag)
+        if result == :error do
+          AMQP.Basic.reject(chan, tag, requeue: false)
+        else
+          AMQP.Basic.ack(chan, tag)
+        end
       end
     end)
     if opts[:bind_once] do
