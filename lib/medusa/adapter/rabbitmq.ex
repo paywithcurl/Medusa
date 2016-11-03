@@ -121,6 +121,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     :medusa
     |> Application.get_env(Medusa)
     |> get_in([:RabbitMQ, :connection])
+    |> Kernel.||([])
   end
 
 end
