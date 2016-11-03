@@ -108,7 +108,8 @@ defmodule Medusa.Producer.RabbitMQ do
       Process.monitor(chan.pid)
       chan
     else
-      _ ->
+      error ->
+        Logger.warn("#{__MODULE__} setup_channel #{inspect error}")
         Process.sleep(1_000)
         setup_channel(topic, queue_name)
     end
