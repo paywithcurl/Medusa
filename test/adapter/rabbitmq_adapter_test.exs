@@ -17,7 +17,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "Send events" do
-      Medusa.consume("foo.bar", &MyModule.echo/1)
+      Medusa.consume("foo.bar", &MyModule.echo/1, queue_name: "echo")
       Medusa.consume("foo.*", &MyModule.echo/1)
       Medusa.consume("foo.baz", &MyModule.echo/1)
       Process.sleep(100) # wait RabbitMQ connection

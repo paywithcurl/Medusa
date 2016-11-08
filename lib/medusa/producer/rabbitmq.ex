@@ -6,12 +6,21 @@ defmodule Medusa.Producer.RabbitMQ do
   alias Medusa.Broker.Message
   alias Medusa.Adapter.RabbitMQ, as: Adapter
 
-  defstruct demand: 0, channel: nil, consumer_tag: nil, topic: nil, queue_name: nil
+  defstruct [
+    demand: 0,
+    channel: nil,
+    consumer_tag: nil,
+    topic: nil,
+    queue_name: nil
+  ]
 
   def start_link(opts) do
     topic = Keyword.fetch!(opts, :name)
     function = Keyword.fetch!(opts, :function)
-    queue_name = queue_name(topic, function)
+    queue_name =
+      opts
+      |> Keyword.get(:queue_name)
+      |> queue_name(topic, function)
     GenStage.start_link(__MODULE__,
                         {topic, queue_name},
                         name: String.to_atom(queue_name))
@@ -36,7 +45,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_cancel(_reason, _from, state) do
-    close_connection(state.channel.conn)
+    close_connection(state.channel)
     {:stop, :normal, state}
   end
 
@@ -49,7 +58,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info({:basic_cancel, _meta}, state) do
-    close_connection(state.channel.conn)
+    close_connection(state.channel)
     {:stop, :normal, state}
   end
 
@@ -74,12 +83,20 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
-    close_connection(state.channel.conn)
+    close_connection(state.channel)
     new_channel = setup_channel(state.topic, state.queue_name)
     state
     |> Map.put(:channel, new_channel)
     |> Map.put(:consumer_tag, nil)
     |> get_next_event
+  end
+
+  def terminate(reason, state) do
+    Logger.error("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
   end
 
   defp get_next_event(%__MODULE__{channel: nil} = state) do
@@ -98,8 +115,8 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   defp setup_channel(topic, queue_name) do
-    with exchange when is_binary(exchange) <- Adapter.exchange(),
-         {:ok, conn} <- AMQP.Connection.open(Adapter.connection_opts),
+    with %AMQP.Connection{} = conn <- Adapter.connection(),
+         exchange when is_binary(exchange) <- Adapter.exchange(),
          {:ok, chan} <- AMQP.Channel.open(conn),
          :ok <- AMQP.Exchange.topic(chan, exchange, durable: true),
          :ok <- AMQP.Basic.qos(chan, prefetch_count: 1),
@@ -120,9 +137,9 @@ defmodule Medusa.Producer.RabbitMQ do
     consumer_tag
   end
 
-  defp close_connection(%AMQP.Connection{} = conn) do
-    if Process.alive?(conn.pid) do
-      AMQP.Connection.close(conn)
+  defp close_connection(%AMQP.Channel{} = chan) do
+    if Process.alive?(chan.pid) do
+      AMQP.Channel.close(chan)
     end
   end
 
@@ -132,10 +149,17 @@ defmodule Medusa.Producer.RabbitMQ do
     |> Keyword.get(:group)
   end
 
-  defp queue_name(topic, function) do
+  defp queue_name(name, topic, function) do
     group = group_name || random_name
-    name = {group, topic, function} |> :erlang.phash2
-    "#{group}.#{name}"
+    "#{group}.#{do_queue_name(name, group, topic, function)}"
+  end
+
+  defp do_queue_name(name, _, _, _) when is_binary(name) do
+    name
+  end
+
+  defp do_queue_name(_, group, topic, function) do
+    {group, topic, function} |> :erlang.phash2
   end
 
   defp random_name(len \\ 8) do
@@ -145,11 +169,6 @@ defmodule Medusa.Producer.RabbitMQ do
     |> binary_part(0, len)
   end
 
-  defp queue_opts do
-    case group_name do
-      nil -> [exclusive: true]
-      _ -> [durable: true]
-    end
-  end
+  defp queue_opts, do: [durable: true]
 
 end
