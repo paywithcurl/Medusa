@@ -14,6 +14,10 @@ defmodule Medusa.Adapter.RabbitMQ do
     Connection.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  def connection do
+    Connection.call(__MODULE__, :rabbitmq_connection)
+  end
+
   def exchange do
     Connection.call(__MODULE__, :rabbitmq_exchange)
   end
@@ -40,6 +44,10 @@ defmodule Medusa.Adapter.RabbitMQ do
         Logger.warn("#{__MODULE__} connect: #{inspect error}")
         {:backoff, 1_000, %{state | connection: nil}}
     end
+  end
+
+  def handle_call(:rabbitmq_connection, _from, state) do
+    {:reply, state.connection, state}
   end
 
   def handle_call(:rabbitmq_exchange, _from, state) do

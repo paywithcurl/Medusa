@@ -6,7 +6,13 @@ defmodule Medusa.Producer.RabbitMQ do
   alias Medusa.Broker.Message
   alias Medusa.Adapter.RabbitMQ, as: Adapter
 
-  defstruct demand: 0, channel: nil, consumer_tag: nil, topic: nil, queue_name: nil
+  defstruct [
+    demand: 0,
+    channel: nil,
+    consumer_tag: nil,
+    topic: nil,
+    queue_name: nil
+  ]
 
   def start_link(opts) do
     topic = Keyword.fetch!(opts, :name)
@@ -39,7 +45,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_cancel(_reason, _from, state) do
-    close_connection(state.channel.conn)
+    close_connection(state.channel)
     {:stop, :normal, state}
   end
 
@@ -52,7 +58,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info({:basic_cancel, _meta}, state) do
-    close_connection(state.channel.conn)
+    close_connection(state.channel)
     {:stop, :normal, state}
   end
 
@@ -77,7 +83,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
-    close_connection(state.channel.conn)
+    close_connection(state.channel)
     new_channel = setup_channel(state.topic, state.queue_name)
     state
     |> Map.put(:channel, new_channel)
@@ -109,8 +115,8 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   defp setup_channel(topic, queue_name) do
-    with exchange when is_binary(exchange) <- Adapter.exchange(),
-         {:ok, conn} <- AMQP.Connection.open(Adapter.connection_opts),
+    with %AMQP.Connection{} = conn <- Adapter.connection(),
+         exchange when is_binary(exchange) <- Adapter.exchange(),
          {:ok, chan} <- AMQP.Channel.open(conn),
          :ok <- AMQP.Exchange.topic(chan, exchange, durable: true),
          :ok <- AMQP.Basic.qos(chan, prefetch_count: 1),
@@ -131,9 +137,9 @@ defmodule Medusa.Producer.RabbitMQ do
     consumer_tag
   end
 
-  defp close_connection(%AMQP.Connection{} = conn) do
-    if Process.alive?(conn.pid) do
-      AMQP.Connection.close(conn)
+  defp close_connection(%AMQP.Channel{} = chan) do
+    if Process.alive?(chan.pid) do
+      AMQP.Channel.close(chan)
     end
   end
 
