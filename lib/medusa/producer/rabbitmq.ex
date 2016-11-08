@@ -11,7 +11,10 @@ defmodule Medusa.Producer.RabbitMQ do
   def start_link(opts) do
     topic = Keyword.fetch!(opts, :name)
     function = Keyword.fetch!(opts, :function)
-    queue_name = queue_name(topic, function)
+    queue_name =
+      opts
+      |> Keyword.get(:queue_name)
+      |> queue_name(topic, function)
     GenStage.start_link(__MODULE__,
                         {topic, queue_name},
                         name: String.to_atom(queue_name))
@@ -140,10 +143,17 @@ defmodule Medusa.Producer.RabbitMQ do
     |> Keyword.get(:group)
   end
 
-  defp queue_name(topic, function) do
+  defp queue_name(name, topic, function) do
     group = group_name || random_name
-    name = {group, topic, function} |> :erlang.phash2
-    "#{group}.#{name}"
+    "#{group}.#{do_queue_name(name, group, topic, function)}"
+  end
+
+  defp do_queue_name(name, _, _, _) when is_binary(name) do
+    name
+  end
+
+  defp do_queue_name(_, group, topic, function) do
+    {group, topic, function} |> :erlang.phash2
   end
 
   defp random_name(len \\ 8) do

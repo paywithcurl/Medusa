@@ -48,7 +48,8 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def handle_call({:new_route, event, function, opts}, _from, state) do
     Logger.debug("#{__MODULE__}: new route #{inspect event}")
-    with {:ok, p} <- Producer.start_child(event, function: function),
+    producer_opts = Keyword.put(opts, :function, function)
+    with {:ok, p} <- Producer.start_child(event, producer_opts),
          {:ok, _} <- Consumer.start_child(function, p, opts) do
       {:reply, {:ok, p}, state}
     else
