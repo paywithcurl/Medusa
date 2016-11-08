@@ -35,6 +35,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def connect(_, state) do
+    Logger("#{__MODULE__} connecting")
     opts = connection_opts || []
     case AMQP.Connection.open(opts) do
       {:ok, conn} ->
@@ -89,19 +90,23 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:reply, :error, state}
   end
 
-  def handle_info({:basic_consume_ok, _meta}, state) do
+  def handle_info({:basic_consume_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel, _meta}, state) do
-    {:stop, :normal, state}
+  def handle_info({:basic_cancel, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
+    {:noreply, state}
   end
 
   def handle_info({:basic_cancel_ok, _meta}, state) do
-    {:noreply, state}
+    Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
+    {:stop, :normal, state}
   end
 
-  def handle_info({:basic_deliver, _payload, _meta}, state) do
+  def handle_info({:basic_deliver, payload, _meta}, state) do
+    Logger.debug("#{__MODULE__} basic_deliver: #{inspect payload}")
     {:noreply, state}
   end
 
@@ -117,6 +122,14 @@ defmodule Medusa.Adapter.RabbitMQ do
   def handle_info(msg, state) do
     Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self}")
     {:noreply, state}
+  end
+
+  def terminate(reason, state) do
+    Logger.error("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
   end
 
   defp setup_channel(conn) do

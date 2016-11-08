@@ -33,6 +33,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_demand(demand, state) do
+    Logger.debug("#{__MODULE__} handle_demand: #{inspect demand}")
     get_next_event(%{state | demand: demand})
   end
 
@@ -40,30 +41,31 @@ defmodule Medusa.Producer.RabbitMQ do
     {:automatic, state}
   end
 
-  def handle_cancel({:down, _reason, _process}, _from, state) do
-     {:noreply, [], state}
-  end
-
-  def handle_cancel(_reason, _from, state) do
+  def handle_cancel({:down, :normal}, _from, state) do
+    Logger.debug("#{__MODULE__} handle_cancel: normal")
     close_connection(state.channel)
     {:stop, :normal, state}
   end
 
-  def handle_cancel(_reason, _from, state) do
+  def handle_cancel(reason, _from, state) do
+    Logger.debug("#{__MODULE__} handle_cancel: #{inspect reason}")
     {:noreply, [], state}
   end
 
-  def handle_info({:basic_consume_ok, _meta}, state) do
+  def handle_info({:basic_consume_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
     {:noreply, [], state}
   end
 
   def handle_info({:basic_cancel, _meta}, state) do
-    close_connection(state.channel)
-    {:stop, :normal, state}
+    Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
+    {:noreply, [], state}
   end
 
-  def handle_info({:basic_cancel_ok, _meta}, state) do
-    {:noreply, [], state}
+  def handle_info({:basic_cancel_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
+    close_connection(state.channel)
+    {:stop, :normal, state}
   end
 
   def handle_info({:basic_deliver, payload, %{delivery_tag: tag}}, state) do
