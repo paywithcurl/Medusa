@@ -153,11 +153,6 @@ defmodule Medusa.Producer.RabbitMQ do
     |> binary_part(0, len)
   end
 
-  defp queue_opts do
-    case group_name do
-      nil -> [exclusive: true]
-      _ -> [durable: true]
-    end
-  end
+  defp queue_opts, do: [durable: true]
 
 end
