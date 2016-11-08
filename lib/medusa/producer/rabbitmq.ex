@@ -82,6 +82,14 @@ defmodule Medusa.Producer.RabbitMQ do
     |> get_next_event
   end
 
+  def terminate(reason, state) do
+    Logger.error("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
+  end
+
   defp get_next_event(%__MODULE__{channel: nil} = state) do
     channel = setup_channel(state.topic, state.queue_name)
     get_next_event(%{state | channel: channel})

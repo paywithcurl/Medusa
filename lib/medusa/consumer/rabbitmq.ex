@@ -28,6 +28,14 @@ defmodule Medusa.Consumer.RabbitMQ do
     |> do_handle_events(state)
   end
 
+  def terminate(reason, state) do
+    Logger.error("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
+  end
+
   defp do_handle_events([], state) do
     {:noreply, [], state}
   end
