@@ -35,7 +35,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def connect(_, state) do
-    Logger("#{__MODULE__} connecting")
+    Logger.debug("#{__MODULE__} connecting")
     opts = connection_opts || []
     case AMQP.Connection.open(opts) do
       {:ok, conn} ->
@@ -100,7 +100,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel_ok, _meta}, state) do
+  def handle_info({:basic_cancel_ok, meta}, state) do
     Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
     {:stop, :normal, state}
   end

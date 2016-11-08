@@ -57,7 +57,7 @@ defmodule Medusa.Producer.RabbitMQ do
     {:noreply, [], state}
   end
 
-  def handle_info({:basic_cancel, _meta}, state) do
+  def handle_info({:basic_cancel, meta}, state) do
     Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
     {:noreply, [], state}
   end
