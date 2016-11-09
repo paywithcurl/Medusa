@@ -5,9 +5,14 @@ defmodule Medusa.Consumer.RabbitMQ do
   require Logger
 
   def start_link(args) do
+    to_link =
+      args
+      |> get_in([:opts, :queue_name])
+      |> String.to_atom
+      |> Process.whereis
     params = %{
       function: Keyword.fetch!(args, :function),
-      to_link: Keyword.fetch!(args, :to_link),
+      to_link: to_link,
       opts: Keyword.get(args, :opts, [])
    }
     GenStage.start_link(__MODULE__, params)

@@ -16,11 +16,7 @@ defmodule Medusa.Producer.RabbitMQ do
 
   def start_link(opts) do
     topic = Keyword.fetch!(opts, :name)
-    function = Keyword.fetch!(opts, :function)
-    queue_name =
-      opts
-      |> Keyword.get(:queue_name)
-      |> queue_name(topic, function)
+    queue_name = Keyword.fetch!(opts, :queue_name)
     GenStage.start_link(__MODULE__,
                         {topic, queue_name},
                         name: String.to_atom(queue_name))
@@ -43,7 +39,6 @@ defmodule Medusa.Producer.RabbitMQ do
 
   def handle_cancel({:down, :normal}, _from, state) do
     Logger.debug("#{__MODULE__} handle_cancel: normal")
-    close_connection(state.channel)
     {:stop, :normal, state}
   end
 
@@ -64,7 +59,6 @@ defmodule Medusa.Producer.RabbitMQ do
 
   def handle_info({:basic_cancel_ok, meta}, state) do
     Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
-    close_connection(state.channel)
     {:stop, :normal, state}
   end
 
@@ -85,8 +79,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
-    close_connection(state.channel)
-    new_channel = setup_channel(state.topic, state.queue_name)
+    new_channel = setup_channel(state.channel, state.topic, state.queue_name)
     state
     |> Map.put(:channel, new_channel)
     |> Map.put(:consumer_tag, nil)
@@ -94,6 +87,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def terminate(reason, state) do
+    ensure_channel_closed(state.channel)
     Logger.error("""
       #{__MODULE__}
       state: #{inspect state}
@@ -102,7 +96,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   defp get_next_event(%__MODULE__{channel: nil} = state) do
-    channel = setup_channel(state.topic, state.queue_name)
+    channel = setup_channel(state.channel, state.topic, state.queue_name)
     get_next_event(%{state | channel: channel})
   end
 
@@ -116,13 +110,14 @@ defmodule Medusa.Producer.RabbitMQ do
     {:noreply, [], %{state | consumer_tag: nil}}
   end
 
-  defp setup_channel(topic, queue_name) do
+  defp setup_channel(old_chan, topic, queue_name) do
+    ensure_channel_closed(old_chan)
     with %AMQP.Connection{} = conn <- Adapter.connection(),
          exchange when is_binary(exchange) <- Adapter.exchange(),
          {:ok, chan} <- AMQP.Channel.open(conn),
          :ok <- AMQP.Exchange.topic(chan, exchange, durable: true),
          :ok <- AMQP.Basic.qos(chan, prefetch_count: 1),
-         {:ok, _queue} <- AMQP.Queue.declare(chan, queue_name, queue_opts()),
+         {:ok, _queue} <- AMQP.Queue.declare(chan, queue_name, durable: true),
          :ok <- AMQP.Queue.bind(chan, queue_name, exchange, routing_key: topic) do
       Process.monitor(chan.pid)
       chan
@@ -130,7 +125,7 @@ defmodule Medusa.Producer.RabbitMQ do
       error ->
         Logger.warn("#{__MODULE__} setup_channel #{inspect error}")
         Process.sleep(1_000)
-        setup_channel(topic, queue_name)
+        setup_channel(old_chan, topic, queue_name)
     end
   end
 
@@ -139,38 +134,14 @@ defmodule Medusa.Producer.RabbitMQ do
     consumer_tag
   end
 
-  defp close_connection(%AMQP.Channel{} = chan) do
+  defp ensure_channel_closed(%AMQP.Channel{} = chan) do
     if Process.alive?(chan.pid) do
       AMQP.Channel.close(chan)
     end
   end
 
-  defp group_name do
-    :medusa
-    |> Application.get_env(Medusa)
-    |> Keyword.get(:group)
+  defp ensure_channel_closed(_) do
+    :ok
   end
-
-  defp queue_name(name, topic, function) do
-    group = group_name || random_name
-    "#{group}.#{do_queue_name(name, group, topic, function)}"
-  end
-
-  defp do_queue_name(name, _, _, _) when is_binary(name) do
-    name
-  end
-
-  defp do_queue_name(_, group, topic, function) do
-    {group, topic, function} |> :erlang.phash2
-  end
-
-  defp random_name(len \\ 8) do
-    len
-    |> :crypto.strong_rand_bytes
-    |> Base.url_encode64
-    |> binary_part(0, len)
-  end
-
-  defp queue_opts, do: [durable: true]
 
 end
