@@ -35,7 +35,9 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def connect(_, state) do
+    Logger.debug("#{__MODULE__} connecting")
     opts = connection_opts || []
+    ensure_channel_closed(state.channel)
     case AMQP.Connection.open(opts) do
       {:ok, conn} ->
         Process.monitor(conn.pid)
@@ -56,8 +58,12 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def handle_call({:new_route, event, function, opts}, _from, state) do
     Logger.debug("#{__MODULE__}: new route #{inspect event}")
-    producer_opts = Keyword.put(opts, :function, function)
-    with {:ok, p} <- Producer.start_child(event, producer_opts),
+    queue_name =
+      opts
+      |> Keyword.get(:queue_name)
+      |> queue_name(event, function)
+    opts = Keyword.put(opts, :queue_name, queue_name)
+    with {:ok, p} <- Producer.start_child(event, opts),
          {:ok, _} <- Consumer.start_child(function, p, opts) do
       {:reply, {:ok, p}, state}
     else
@@ -89,19 +95,23 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:reply, :error, state}
   end
 
-  def handle_info({:basic_consume_ok, _meta}, state) do
+  def handle_info({:basic_consume_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel, _meta}, state) do
+  def handle_info({:basic_cancel, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
+    {:noreply, state}
+  end
+
+  def handle_info({:basic_cancel_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_cancel_ok, _meta}, state) do
-    {:noreply, state}
-  end
-
-  def handle_info({:basic_deliver, _payload, _meta}, state) do
+  def handle_info({:basic_deliver, payload, _meta}, state) do
+    Logger.debug("#{__MODULE__} basic_deliver: #{inspect payload}")
     {:noreply, state}
   end
 
@@ -119,6 +129,15 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, state}
   end
 
+  def terminate(reason, state) do
+    ensure_channel_closed(state.channel)
+    Logger.error("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
+  end
+
   defp setup_channel(conn) do
     {:ok, chan} = AMQP.Channel.open(conn)
     Process.monitor(chan.pid)
@@ -126,11 +145,47 @@ defmodule Medusa.Adapter.RabbitMQ do
     chan
   end
 
-  def connection_opts do
+  defp ensure_channel_closed(%AMQP.Channel{} = chan) do
+    if Process.alive?(chan.pid) do
+      AMQP.Channel.close(chan)
+    end
+  end
+
+  defp ensure_channel_closed(_) do
+    :ok
+  end
+
+  defp connection_opts do
     :medusa
     |> Application.get_env(Medusa)
     |> get_in([:RabbitMQ, :connection])
     |> Kernel.||([])
+  end
+
+  defp group_name do
+    :medusa
+    |> Application.get_env(Medusa)
+    |> Keyword.get(:group)
+  end
+
+  def queue_name(name, topic, function) do
+    group = group_name || random_name
+    "#{group}.#{do_queue_name(name, group, topic, function)}"
+  end
+
+  def do_queue_name(name, _, _, _) when is_binary(name) do
+    name
+  end
+
+  def do_queue_name(_, group, topic, function) do
+    {group, topic, function} |> :erlang.phash2
+  end
+
+  defp random_name(len \\ 8) do
+    len
+    |> :crypto.strong_rand_bytes
+    |> Base.url_encode64
+    |> binary_part(0, len)
   end
 
 end
