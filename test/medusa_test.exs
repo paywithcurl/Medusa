@@ -47,4 +47,26 @@ defmodule MedusaTest do
     assert result == :ok
   end
 
+  test "Publish adds an id in metadata if not present" do
+    MedusaConfig.set_message_validator(:config, &ensures_id_present/3)
+    result = Medusa.publish "validator.accepted", %{}, %{}
+    MedusaConfig.set_message_validator(:config, nil)
+    assert result == :ok
+  end
+
+  test "Publish leaves id in metadata if present" do
+    MedusaConfig.set_message_validator(:config, &ensures_id_1234/3)
+    result = Medusa.publish "validator.accepted", %{}, %{:id => 1234, :test => "blah"}
+    MedusaConfig.set_message_validator(:config, nil)
+    assert result == :ok
+  end
+
+  defp ensures_id_1234(_, _, %{id: 1234}) do
+    true
+  end
+
+  defp ensures_id_present(_, _, %{id: _}) do
+    true
+  end
+
 end

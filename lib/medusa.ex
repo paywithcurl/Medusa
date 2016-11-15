@@ -60,6 +60,11 @@ defmodule Medusa do
   end
 
   def publish(event, payload, metadata \\ %{}) do
+    metadata = cond do
+      Map.has_key?(metadata, :id) -> metadata
+      true -> Map.put(metadata, :id, UUID.uuid4)
+    end
+
     case is_message_valid?(event, payload, metadata) do
       true -> Medusa.Broker.publish(event, payload, metadata)
       _ -> :failed

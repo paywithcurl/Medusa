@@ -36,6 +36,7 @@ defmodule Medusa.Mixfile do
      {:amqp_client, git: "https://github.com/dsrosario/amqp_client.git", branch: "erlang_otp_19", override: true},
      {:connection, "~> 1.0.4"},
      {:gen_stage, "~> 0.4.0"},
+     {:uuid, "~> 1.1" },
      {:poison, "~> 2.0"}]
   end
 end
