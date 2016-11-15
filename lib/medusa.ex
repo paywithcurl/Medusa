@@ -32,6 +32,14 @@ defmodule Medusa do
 
   def start(_type, _args) do
     ensure_config_correct()
+    env = Application.get_env(:medusa, Medusa)
+    GenServer.start_link(
+      MedusaConfig, %{
+	adapter: env[:adapter],
+      },
+      [name: :config]
+    )
+
     children =
       [
         child_adapter(),
@@ -55,9 +63,7 @@ defmodule Medusa do
   end
 
   def adapter do
-    :medusa
-    |> Application.get_env(Medusa)
-    |> Keyword.fetch!(:adapter)
+    MedusaConfig.get_adapter(:config)
   end
 
   defp child_adapter do
