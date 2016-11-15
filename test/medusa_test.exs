@@ -31,4 +31,20 @@ defmodule MedusaTest do
       fn -> Medusa.consume("foo.bob", fn -> IO.puts("blah") end) end
   end
 
+  test "Don't publish when validator rejects message" do
+    validator = fn _, _, _ -> false end
+    MedusaConfig.set_message_validator(:config, validator)
+    result = Medusa.publish "validator.rejected", %{}, %{}
+    MedusaConfig.set_message_validator(:config, nil)
+    assert result == :failed
+  end
+
+  test "Publish when validator accepts message" do
+    validator = fn _, _, _ -> true end
+    MedusaConfig.set_message_validator(:config, validator)
+    result = Medusa.publish "validator.accepted", %{}, %{}
+    MedusaConfig.set_message_validator(:config, nil)
+    assert result == :ok
+  end
+
 end

@@ -36,6 +36,7 @@ defmodule Medusa do
     GenServer.start_link(
       MedusaConfig, %{
 	adapter: env[:adapter],
+	message_validator: env[:message_validator]
       },
       [name: :config]
     )
@@ -59,7 +60,10 @@ defmodule Medusa do
   end
 
   def publish(event, payload, metadata \\ %{}) do
-    Medusa.Broker.publish(event, payload, metadata)
+    case is_message_valid?(event, payload, metadata) do
+      true -> Medusa.Broker.publish(event, payload, metadata)
+      _ -> :failed
+    end
   end
 
   def adapter do
@@ -83,10 +87,17 @@ defmodule Medusa do
     adapter = Keyword.get(app_config, :adapter)
     cond do
       adapter in @available_adapters ->
-        :ok
+	:ok
       true ->
         new_app_config = Keyword.merge(app_config, [adapter: @default_adapter])
         Application.put_env(:medusa, Medusa, new_app_config, persistent: true)
+    end
+  end
+
+  defp is_message_valid?(event, payload, metadata) do
+    case MedusaConfig.get_message_validator(:config) do
+      nil -> true
+      f -> f.(event, payload, metadata)
     end
   end
 
