@@ -32,6 +32,10 @@ defmodule Medusa do
 
   def start(_type, _args) do
     ensure_config_correct()
+    {:ok, supervisor} = Supervisor.start_link([], [strategy: :one_for_one, name: Medusa.Supervisor])
+
+    # MedusaConfig needs to be started before child_adapter is called
+    {:ok, _} = Supervisor.start_child(supervisor, config_worker)
     children =
       [
         child_adapter(),
@@ -41,8 +45,8 @@ defmodule Medusa do
       ]
       |> List.flatten
 
-    opts = [strategy: :one_for_one, name: Medusa.Supervisor]
-    Supervisor.start_link(children, opts)
+    Enum.each children, fn (child) -> Supervisor.start_child(supervisor, child) end
+    {:ok, supervisor}
   end
 
   def consume(route, function, opts \\ []) do
@@ -51,13 +55,21 @@ defmodule Medusa do
   end
 
   def publish(event, payload, metadata \\ %{}) do
-    Medusa.Broker.publish(event, payload, metadata)
+    metadata = cond do
+      Map.has_key?(metadata, :id) -> metadata
+      true -> Map.put(metadata, :id, UUID.uuid4)
+    end
+
+    case is_message_valid?(event, payload, metadata) do
+      true -> Medusa.Broker.publish(event, payload, metadata)
+      _ ->
+	Logger.warn "Message failed validation #{event} #{inspect payload} #{inspect metadata}"
+	:failed
+    end
   end
 
   def adapter do
-    :medusa
-    |> Application.get_env(Medusa)
-    |> Keyword.fetch!(:adapter)
+    MedusaConfig.get_adapter(:medusa_config)
   end
 
   defp child_adapter do
@@ -72,15 +84,30 @@ defmodule Medusa do
     end
   end
 
+  defp config_worker do
+    env = Application.get_env(:medusa, Medusa)
+    worker(MedusaConfig, [%{
+      adapter: env[:adapter],
+      message_validator: env[:message_validator]
+    }])
+  end
+
   defp ensure_config_correct do
     app_config = Application.get_env(:medusa, Medusa, [])
     adapter = Keyword.get(app_config, :adapter)
     cond do
       adapter in @available_adapters ->
-        :ok
+	:ok
       true ->
         new_app_config = Keyword.merge(app_config, [adapter: @default_adapter])
         Application.put_env(:medusa, Medusa, new_app_config, persistent: true)
+    end
+  end
+
+  defp is_message_valid?(event, payload, metadata) do
+    case MedusaConfig.get_message_validator(:medusa_config) do
+      nil -> true
+      f -> f.(event, payload, metadata)
     end
   end
 

@@ -31,4 +31,42 @@ defmodule MedusaTest do
       fn -> Medusa.consume("foo.bob", fn -> IO.puts("blah") end) end
   end
 
+  test "Don't publish when validator rejects message" do
+    validator = fn _, _, _ -> false end
+    MedusaConfig.set_message_validator(:medusa_config, validator)
+    result = Medusa.publish "validator.rejected", %{}, %{}
+    MedusaConfig.set_message_validator(:medusa_config, nil)
+    assert result == :failed
+  end
+
+  test "Publish when validator accepts message" do
+    validator = fn _, _, _ -> true end
+    MedusaConfig.set_message_validator(:medusa_config, validator)
+    result = Medusa.publish "validator.accepted", %{}, %{}
+    MedusaConfig.set_message_validator(:medusa_config, nil)
+    assert result == :ok
+  end
+
+  test "Publish adds an id in metadata if not present" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+    result = Medusa.publish "validator.accepted", %{}, %{}
+    MedusaConfig.set_message_validator(:medusa_config, nil)
+    assert result == :ok
+  end
+
+  test "Publish leaves id in metadata if present" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/3)
+    result = Medusa.publish "validator.accepted", %{}, %{:id => 1234, :test => "blah"}
+    MedusaConfig.set_message_validator(:medusa_config, nil)
+    assert result == :ok
+  end
+
+  defp ensures_id_1234(_, _, %{id: 1234}) do
+    true
+  end
+
+  defp ensures_id_present(_, _, %{id: _}) do
+    true
+  end
+
 end
