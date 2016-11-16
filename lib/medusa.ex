@@ -38,7 +38,7 @@ defmodule Medusa do
 	adapter: env[:adapter],
 	message_validator: env[:message_validator]
       },
-      [name: :config]
+      [name: :medusa_config]
     )
 
     children =
@@ -74,7 +74,7 @@ defmodule Medusa do
   end
 
   def adapter do
-    MedusaConfig.get_adapter(:config)
+    MedusaConfig.get_adapter(:medusa_config)
   end
 
   defp child_adapter do
@@ -102,7 +102,7 @@ defmodule Medusa do
   end
 
   defp is_message_valid?(event, payload, metadata) do
-    case MedusaConfig.get_message_validator(:config) do
+    case MedusaConfig.get_message_validator(:medusa_config) do
       nil -> true
       f -> f.(event, payload, metadata)
     end
