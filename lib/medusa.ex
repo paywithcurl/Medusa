@@ -32,15 +32,10 @@ defmodule Medusa do
 
   def start(_type, _args) do
     ensure_config_correct()
-    env = Application.get_env(:medusa, Medusa)
-    GenServer.start_link(
-      MedusaConfig, %{
-	adapter: env[:adapter],
-	message_validator: env[:message_validator]
-      },
-      [name: :medusa_config]
-    )
+    {:ok, supervisor} = Supervisor.start_link([], [strategy: :one_for_one, name: Medusa.Supervisor])
 
+    # MedusaConfig needs to be started before child_adapter is called
+    {:ok, _} = Supervisor.start_child(supervisor, config_worker)
     children =
       [
         child_adapter(),
@@ -50,8 +45,8 @@ defmodule Medusa do
       ]
       |> List.flatten
 
-    opts = [strategy: :one_for_one, name: Medusa.Supervisor]
-    Supervisor.start_link(children, opts)
+    Enum.each children, fn (child) -> Supervisor.start_child(supervisor, child) end
+    {:ok, supervisor}
   end
 
   def consume(route, function, opts \\ []) do
@@ -87,6 +82,14 @@ defmodule Medusa do
       Medusa.Adapter.PG2 -> worker(Medusa.Queue, [])
       _ -> []
     end
+  end
+
+  defp config_worker do
+    env = Application.get_env(:medusa, Medusa)
+    worker(MedusaConfig, [%{
+      adapter: env[:adapter],
+      message_validator: env[:message_validator]
+    }])
   end
 
   defp ensure_config_correct do

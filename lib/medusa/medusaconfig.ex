@@ -1,8 +1,8 @@
 defmodule MedusaConfig do
   use GenServer
 
-  def start_link(state, opts \\ []) do
-    GenServer.start_link(__MODULE__, state, opts)
+  def start_link(state) do
+    GenServer.start_link(__MODULE__, state, name: :medusa_config)
   end
 
   def get_adapter(pid) do
