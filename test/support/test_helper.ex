@@ -8,7 +8,8 @@ defmodule Medusa.TestHelper do
 
   def put_adapter_config(adapter) do
     import Supervisor.Spec, warn: false
-    Application.put_env(:medusa, Medusa, [adapter: adapter], persistent: true)
+    opts = [adapter: adapter, retry_publish: 500]
+    Application.put_env(:medusa, Medusa, opts, persistent: true)
     restart_app()
   end
 

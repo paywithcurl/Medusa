@@ -31,7 +31,8 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def init([]) do
-    :timer.send_interval(5_000, self, :republish)
+    timeout = Keyword.get(config, :retry_publish) || 5_000
+    :timer.send_interval(timeout, self, :republish)
     {:connect, :init, %__MODULE__{}}
   end
 
@@ -97,15 +98,22 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_info(:republish, %{messages: messages} = state) do
-    {{:value, {event, message, times}}, new_messages} = :queue.out(messages)
-    state = %{state | messages: new_messages}
-    {reply, new_state} =
-      if times < 10 do
-        do_publish(event, message, times, state)
-      else
-        Logger.warn("#{__MODULE__} republish failed for #{inspect {event, message}}")
-        {:error, state}
+    range = Range.new(0, :queue.len(messages))
+    new_state = Enum.reduce(range, state, fn (_, acc) ->
+      case :queue.out(acc.messages) do
+        {{:value, {event, message, times}}, new_messages} when times < 10 ->
+          acc = %{acc | messages: new_messages}
+          {_, acc} = do_publish(event, message, times, acc)
+          acc
+
+        {{:value, {event, message, _}}, new_messages} ->
+          Logger.warn("#{__MODULE__} republish failed for #{inspect {event, message}}")
+          %{acc | messages: new_messages}
+
+        {:empty, new_messages} ->
+          %{acc | messages: new_messages}
       end
+    end)
     {:noreply, new_state}
   end
 
@@ -154,6 +162,8 @@ defmodule Medusa.Adapter.RabbitMQ do
     """)
   end
 
+  defp config, do: Application.get_env(:medusa, Medusa)
+
   defp setup_channel(conn) do
     {:ok, chan} = AMQP.Channel.open(conn)
     Process.monitor(chan.pid)
@@ -172,18 +182,13 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   defp connection_opts do
-    :medusa
-    |> Application.get_env(Medusa)
+    config
     |> get_in([:RabbitMQ, :connection])
     |> Kernel.||([])
     |> Keyword.put_new(:heartbeat, 10)
   end
 
-  defp group_name do
-    :medusa
-    |> Application.get_env(Medusa)
-    |> Keyword.get(:group)
-  end
+  defp group_name, do: Keyword.get(config, :group)
 
   defp queue_name(name, topic, function) do
     group = group_name || random_name

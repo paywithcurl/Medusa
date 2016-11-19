@@ -78,9 +78,13 @@ defmodule Medusa.Adapter.RabbitMQTest do
       adapter = RabbitMQ |> Process.whereis
       path = [ Access.key(:mod_state), Access.key(:channel) ]
       :sys.replace_state(adapter, &put_in(&1, path, nil))
-      assert Medusa.publish("publish.queue", "foobar") == :error  # can't publish right now
+      assert Medusa.publish("publish.queue", "foo") == :error  # can't publish right now
+      assert Medusa.publish("publish.queue", "bar") == :error  # can't publish right now
+      assert Medusa.publish("publish.queue", "baz") == :error  # can't publish right now
       send(adapter, {:DOWN, make_ref(), :process, self, :test})
-      assert_receive %Message{body: "foobar"}, 1_000
+      assert_receive %Message{body: "foo"}, 1_000
+      assert_receive %Message{body: "bar"}, 1_000
+      assert_receive %Message{body: "baz"}, 1_000
     end
 
   end
