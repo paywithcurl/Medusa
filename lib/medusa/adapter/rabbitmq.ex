@@ -6,7 +6,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
 
-  defstruct channel: nil, connection: nil
+  defstruct channel: nil, connection: nil, messages: :queue.new
 
   @exchange_name "medusa"
 
@@ -31,6 +31,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def init([]) do
+    :timer.send_interval(5_000, self, :republish)
     {:connect, :init, %__MODULE__{}}
   end
 
@@ -75,24 +76,37 @@ defmodule Medusa.Adapter.RabbitMQ do
     end
   end
 
-  def handle_call({:publish, event, payload}, _from, %{channel: chan} = state)
-  when not is_nil(chan) do
+  def handle_call({:publish, event, payload}, _from, %{channel: chan} = state) do
     Logger.debug("#{__MODULE__}: publish #{inspect event}: #{inspect payload}")
     case Poison.encode(payload) do
       {:ok, message} ->
-        AMQP.Basic.publish(state.channel,
-                           @exchange_name,
-                           event,
-                           message,
-                           persistent: true)
-        {:reply, :ok, state}
-      _ ->
+        {reply, new_state} = do_publish(event, message, 0, state)
+        {:reply, reply, new_state}
+      {:error, _} ->
+        Logger.warn("#{__MODULE__}: publish malformed message #{inspect payload}")
         {:reply, :error, state}
     end
   end
 
   def handle_call({:publish, _, _}, _from, state) do
     {:reply, :error, state}
+  end
+
+  def handle_info(:republish, %{messages: {[], []}} = state) do
+    {:noreply, state}
+  end
+
+  def handle_info(:republish, %{messages: messages} = state) do
+    {{:value, {event, message, times}}, new_messages} = :queue.out(messages)
+    state = %{state | messages: new_messages}
+    {reply, new_state} =
+      if times < 10 do
+        do_publish(event, message, times, state)
+      else
+        Logger.warn("#{__MODULE__} republish failed for #{inspect {event, message}}")
+        {:error, state}
+      end
+    {:noreply, new_state}
   end
 
   def handle_info({:basic_consume_ok, meta}, state) do
@@ -115,11 +129,13 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, _, _, _, _}, %__MODULE__{channel: %{conn: conn}} = state) do
-    case Process.alive?(conn.pid) do
-      true ->
-        {:noreply, %{state | channel: setup_channel(conn)}}
-      false ->
+  def handle_info({:DOWN, _, _, _, _}, state) do
+    with %AMQP.Channel{} = chan <- state.channel,
+         true <- Process.alive?(chan.conn.pid) do
+      ensure_channel_closed(state.channel)
+      {:noreply, %{state | channel: setup_channel(chan.conn)}}
+    else
+      _ ->
         {:connect, :reconnect, %{state | connection: nil}}
     end
   end
@@ -168,7 +184,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     |> Keyword.get(:group)
   end
 
-  def queue_name(name, topic, function) do
+  defp queue_name(name, topic, function) do
     group = group_name || random_name
     "#{group}.#{do_queue_name(name, group, topic, function)}"
   end
@@ -179,6 +195,21 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def do_queue_name(_, group, topic, function) do
     {group, topic, function} |> :erlang.phash2
+  end
+
+  defp do_publish(event, message, times, %{channel: chan, messages: messages} = state) do
+    try do
+      AMQP.Basic.publish(chan,
+                         @exchange_name,
+                         event,
+                         message,
+                         persistent: true)
+      {:ok, state}
+    rescue
+      _ ->
+        new_messages = :queue.in({event, message, times + 1}, messages)
+        {:error, %{state | messages: new_messages}}
+    end
   end
 
   defp random_name(len \\ 8) do
