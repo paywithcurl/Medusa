@@ -176,7 +176,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     |> Application.get_env(Medusa)
     |> get_in([:RabbitMQ, :connection])
     |> Kernel.||([])
-    |> Keyword.put_new(heartbeat: 10)
+    |> Keyword.put_new(:heartbeat, 10)
   end
 
   defp group_name do
