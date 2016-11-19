@@ -37,7 +37,7 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def connect(_, state) do
     Logger.debug("#{__MODULE__} connecting")
-    opts = connection_opts || []
+    opts = connection_opts
     ensure_channel_closed(state.channel)
     case AMQP.Connection.open(opts) do
       {:ok, conn} ->
@@ -176,6 +176,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     |> Application.get_env(Medusa)
     |> get_in([:RabbitMQ, :connection])
     |> Kernel.||([])
+    |> Keyword.put_new(heartbeat: 10)
   end
 
   defp group_name do
