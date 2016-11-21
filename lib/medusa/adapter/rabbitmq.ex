@@ -205,7 +205,8 @@ defmodule Medusa.Adapter.RabbitMQ do
     {group, topic, function} |> :erlang.phash2
   end
 
-  defp do_publish(event, message, times, %{channel: chan, messages: messages} = state) do
+  defp do_publish(event, message, times,
+  %{channel: chan, messages: messages} = state) when not is_nil(chan) do
     try do
       AMQP.Basic.publish(chan,
                          @exchange_name,
@@ -218,6 +219,11 @@ defmodule Medusa.Adapter.RabbitMQ do
         new_messages = :queue.in({event, message, times + 1}, messages)
         {:error, %{state | messages: new_messages}}
     end
+  end
+
+  defp do_publish(event, message, times, %{messages: messages} = state) do
+    new_messages = :queue.in({event, message, times}, messages)
+    {:error, %{state | messages: new_messages}}
   end
 
   defp random_name(len \\ 8) do
