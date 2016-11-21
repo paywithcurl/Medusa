@@ -62,11 +62,11 @@ defmodule Medusa.Adapter.PG2Test do
       ref_con2 = Process.monitor(con2)
       ref_prod = Process.monitor(producer)
       Medusa.publish("local.bind2", "only con2 die")
-      assert_receive %Message{body: "only con2 die"}, 500
-      assert_receive %Message{body: "only con2 die"}, 500
-      refute_receive {:DOWN, ^ref_con1, :process, _, :normal}, 500
-      assert_receive {:DOWN, ^ref_con2, :process, _, :normal}, 500
-      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}, 500
+      assert_receive %Message{body: "only con2 die"}, 5000
+      assert_receive %Message{body: "only con2 die"}, 5000
+      refute_receive {:DOWN, ^ref_con1, :process, _, :normal}, 5000
+      assert_receive {:DOWN, ^ref_con2, :process, _, :normal}, 5000
+      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}, 5000
     end
 
     test "Send event to consumer with bind_once: true and then
@@ -85,11 +85,11 @@ defmodule Medusa.Adapter.PG2Test do
       ref_con2 = Process.monitor(con2)
       ref_prod = Process.monitor(producer)
       Medusa.publish("local.bind3", "only con1 die")
-      assert_receive %Message{body: "only con1 die"}, 2_000
-      assert_receive %Message{body: "only con1 die"}, 2_000
-      assert_receive {:DOWN, ^ref_con1, :process, _, :normal}, 500
-      refute_receive {:DOWN, ^ref_con2, :process, _, :normal}, 500
-      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}, 500
+      assert_receive %Message{body: "only con1 die"}, 5000
+      assert_receive %Message{body: "only con1 die"}, 5000
+      assert_receive {:DOWN, ^ref_con1, :process, _, :normal}, 5000
+      refute_receive {:DOWN, ^ref_con2, :process, _, :normal}, 5000
+      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}, 5000
     end
   end
 
