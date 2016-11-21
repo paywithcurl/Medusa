@@ -20,14 +20,16 @@ defmodule Medusa.Adapter.PG2Test do
       Medusa.consume("foo.bar", &MyModule.echo/1)
       Medusa.consume("foo.*", &MyModule.echo/1)
       Medusa.consume("foo.baz", &MyModule.echo/1)
+      Process.sleep(100)
       Medusa.publish("foo.bar", "foobar", %{"optional_field" => "nice_to_have"})
-      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}, 500
-      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}, 500
-      refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}, 500
+      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
+      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
+      refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
     end
 
     test "Send non-match events" do
       Medusa.consume("ping.pong", &MyModule.echo/1)
+      Process.sleep(100)
       Medusa.publish("ping", "ping")
       refute_receive %Message{body: "ping"}
     end
@@ -40,10 +42,11 @@ defmodule Medusa.Adapter.PG2Test do
       assert Process.alive?(producer)
       ref_consumer = Process.monitor(consumer)
       ref_producer = Process.monitor(producer)
+      Process.sleep(100)
       Medusa.publish("local.bind1", "die both")
-      assert_receive %Message{body: "die both"}, 500
-      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}, 500
-      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}, 500
+      assert_receive %Message{body: "die both"}
+      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}
+      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}
     end
 
     test "Send event to consumer with bind_once: true in already exists route
@@ -51,7 +54,7 @@ defmodule Medusa.Adapter.PG2Test do
       assert {:ok, %{consumer: con1, producer: producer}} =
         Medusa.consume("local.bind2", &MyModule.echo/1)
       assert {:ok, %{consumer: con2, producer: ^producer}} =
-        Medusa.consume("local.bind2", &MyModule.echo/1, bind_once: true)
+        Medusa.consume("local.bind2", &MyModule.echo2/1, bind_once: true)
       workers = Supervisor.which_children(Medusa.ConsumerSupervisor)
       assert {:undefined, con1, :worker, [Medusa.Consumer.PG2]} in workers
       assert {:undefined, con2, :worker, [Medusa.Consumer.PG2]} in workers
@@ -61,12 +64,13 @@ defmodule Medusa.Adapter.PG2Test do
       ref_con1 = Process.monitor(con1)
       ref_con2 = Process.monitor(con2)
       ref_prod = Process.monitor(producer)
+      Process.sleep(100)
       Medusa.publish("local.bind2", "only con2 die")
-      assert_receive %Message{body: "only con2 die"}, 500
-      assert_receive %Message{body: "only con2 die"}, 500
-      refute_receive {:DOWN, ^ref_con1, :process, _, :normal}, 500
-      assert_receive {:DOWN, ^ref_con2, :process, _, :normal}, 500
-      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}, 500
+      assert_receive %Message{body: "only con2 die"}
+      assert_receive %Message{body: "only con2 die"}
+      refute_receive {:DOWN, ^ref_con1, :process, _, :normal}
+      assert_receive {:DOWN, ^ref_con2, :process, _, :normal}
+      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}
     end
 
     test "Send event to consumer with bind_once: true and then
@@ -84,12 +88,13 @@ defmodule Medusa.Adapter.PG2Test do
       ref_con1 = Process.monitor(con1)
       ref_con2 = Process.monitor(con2)
       ref_prod = Process.monitor(producer)
+      Process.sleep(100)
       Medusa.publish("local.bind3", "only con1 die")
-      assert_receive %Message{body: "only con1 die"}, 2_000
-      assert_receive %Message{body: "only con1 die"}, 2_000
-      assert_receive {:DOWN, ^ref_con1, :process, _, :normal}, 500
-      refute_receive {:DOWN, ^ref_con2, :process, _, :normal}, 500
-      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}, 500
+      assert_receive %Message{body: "only con1 die"}
+      assert_receive %Message{body: "only con1 die"}
+      assert_receive {:DOWN, ^ref_con1, :process, _, :normal}
+      refute_receive {:DOWN, ^ref_con2, :process, _, :normal}
+      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}
     end
   end
 
