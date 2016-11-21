@@ -31,7 +31,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def init([]) do
-    timeout = Keyword.get(config, :retry_publish) || 5_000
+    timeout = Keyword.get(config, :retry_publish_backoff, 5_000)
     :timer.send_interval(timeout, self, :republish)
     {:connect, :init, %__MODULE__{}}
   end
@@ -98,10 +98,12 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_info(:republish, %{messages: messages} = state) do
+    retry_publish_max = Keyword.get(config, :retry_publish_max, 1)
     range = Range.new(0, :queue.len(messages))
     new_state = Enum.reduce(range, state, fn (_, acc) ->
       case :queue.out(acc.messages) do
-        {{:value, {event, message, times}}, new_messages} when times < 10 ->
+        {{:value, {event, message, times}}, new_messages}
+        when times < retry_publish_max ->
           acc = %{acc | messages: new_messages}
           {_, acc} = do_publish(event, message, times, acc)
           acc
