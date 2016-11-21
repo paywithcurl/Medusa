@@ -54,7 +54,7 @@ defmodule Medusa.Adapter.PG2Test do
       assert {:ok, %{consumer: con1, producer: producer}} =
         Medusa.consume("local.bind2", &MyModule.echo/1)
       assert {:ok, %{consumer: con2, producer: ^producer}} =
-        Medusa.consume("local.bind2", &MyModule.echo2/1, bind_once: true)
+        Medusa.consume("local.bind2", &MyModule.echo/1, bind_once: true)
       workers = Supervisor.which_children(Medusa.ConsumerSupervisor)
       assert {:undefined, con1, :worker, [Medusa.Consumer.PG2]} in workers
       assert {:undefined, con2, :worker, [Medusa.Consumer.PG2]} in workers
