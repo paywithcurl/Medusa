@@ -63,8 +63,8 @@ defmodule Medusa do
     case is_message_valid?(event, payload, metadata) do
       true -> Medusa.Broker.publish(event, payload, metadata)
       _ ->
-	Logger.warn "Message failed validation #{event} #{inspect payload} #{inspect metadata}"
-	:failed
+        Logger.warn "Message failed validation #{event} #{inspect payload} #{inspect metadata}"
+        :failed
     end
   end
 
@@ -97,7 +97,7 @@ defmodule Medusa do
     adapter = Keyword.get(app_config, :adapter)
     cond do
       adapter in @available_adapters ->
-	:ok
+        :ok
       true ->
         new_app_config = Keyword.merge(app_config, [adapter: @default_adapter])
         Application.put_env(:medusa, Medusa, new_app_config, persistent: true)
