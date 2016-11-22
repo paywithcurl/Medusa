@@ -31,7 +31,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def init([]) do
-    timeout = Keyword.get(config, :retry_publish_backoff, 5_000)
+    timeout = Medusa.config |> Keyword.get(:retry_publish_backoff, 5_000)
     :timer.send_interval(timeout, self, :republish)
     {:connect, :init, %__MODULE__{}}
   end
@@ -98,7 +98,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_info(:republish, %{messages: messages} = state) do
-    retry_publish_max = Keyword.get(config, :retry_publish_max, 1)
+    retry_publish_max = Medusa.config |> Keyword.get(:retry_publish_max, 1)
     range = Range.new(0, :queue.len(messages))
     new_state = Enum.reduce(range, state, fn (_, acc) ->
       case :queue.out(acc.messages) do
@@ -164,8 +164,6 @@ defmodule Medusa.Adapter.RabbitMQ do
     """)
   end
 
-  defp config, do: Application.get_env(:medusa, Medusa)
-
   defp setup_channel(conn) do
     {:ok, chan} = AMQP.Channel.open(conn)
     Process.monitor(chan.pid)
@@ -184,13 +182,13 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   defp connection_opts do
-    config
+    Medusa.config
     |> get_in([:RabbitMQ, :connection])
     |> Kernel.||([])
     |> Keyword.put_new(:heartbeat, 10)
   end
 
-  defp group_name, do: Keyword.get(config, :group)
+  defp group_name, do: Medusa.config |> Keyword.get(:group)
 
   defp queue_name(name, topic, function) do
     group = group_name || random_name
