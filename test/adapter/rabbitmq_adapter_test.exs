@@ -21,7 +21,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       Medusa.consume("foo.bar", &MyModule.echo/1, queue_name: "echo")
       Medusa.consume("foo.*", &MyModule.echo/1)
       Medusa.consume("foo.baz", &MyModule.echo/1)
-      Process.sleep(100) # wait RabbitMQ connection
+      Process.sleep(1_000) # wait RabbitMQ connection
       Medusa.publish("foo.bar", "foobar", %{"optional_field" => "nice_to_have"})
       assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
       assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
@@ -31,7 +31,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "Send non-match events" do
       Medusa.consume("ping.pong", &MyModule.echo/1)
-      Process.sleep(100) # wait RabbitMQ connection
+      Process.sleep(1_000) # wait RabbitMQ connection
       Medusa.publish("ping", "ping")
       refute_receive %Message{body: "ping"}
     end
@@ -44,7 +44,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       {:ok, _} =  Medusa.consume("rabbit.bind1", &MyModule.echo/1, bind_once: true)
       [{_, consumer, _, _}] = consumer_children()
       [{_, producer, _, _}] = producer_children()
-      Process.sleep(100) # wait RabbitMQ connection
+      Process.sleep(1_000) # wait RabbitMQ connection
       assert Process.alive?(consumer)
       assert Process.alive?(producer)
       ref_consumer = Process.monitor(consumer)
@@ -61,7 +61,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert producer_children() == []
       {:ok, _} = Medusa.consume("rabbit.bind2", &MyModule.echo/1)
       {:ok, _} = Medusa.consume("rabbit.bind2", &MyModule.echo/1, bind_once: true)
-      Process.sleep(100) # wait RabbitMQ connection
+      Process.sleep(1_000) # wait RabbitMQ connection
       assert length(consumer_children()) == 2
       assert length(producer_children()) == 2
       Medusa.publish("rabbit.bind2", "only con2, prod2 die")
