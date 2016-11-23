@@ -35,7 +35,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   def handle_info({:retry, %Message{metadata: metadata} = message}, state) do
-    max_retry = Medusa.config |> Keyword.get(:retry_consumer_max, 10)
+    max_retry = state.opts[:max_retries] || 1
     if Map.get(metadata, "retry", 1) < max_retry do
       do_event(message, state.function)
     else

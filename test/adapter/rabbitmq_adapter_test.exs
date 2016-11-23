@@ -91,7 +91,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "consume return {:error, reason} will retry" do
       Agent.start(fn -> 0 end, name: :agent_ok)
       Process.sleep(1000)
-      {:ok, _} = Medusa.consume("consume.will.retry", &MyModule.state/1, queue: "test_consume_will_retry")
+      {:ok, _} = Medusa.consume("consume.will.retry",
+                                &MyModule.state/1,
+                                queue: "test_consume_will_retry",
+                                max_retries: 10)
       Process.sleep(1_000)
       Medusa.publish("consume.will.retry", "retry_at_5", %{agent: :agent_ok, times: 5})
       assert_receive %Message{body: "retry_at_5"}, 1_000
@@ -100,7 +103,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "consume raise error will retry" do
       Agent.start_link(fn -> 0 end, name: :agent_raise)
-      {:ok, _} = Medusa.consume("consume.also.retry", &MyModule.state/1, queue: "test_consumer_also_retry")
+      {:ok, _} = Medusa.consume("consume.also.retry",
+                                &MyModule.state/1,
+                                queue: "test_consumer_also_retry",
+                                max_retries: 10)
       Process.sleep(1_000)
       Medusa.publish("consume.also.retry", "retry_at_2", %{agent: :agent_raise, times: 2, raise: true})
       assert_receive %Message{body: "retry_at_2"}, 1_000
@@ -109,7 +115,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "consume throw error will retry" do
       Agent.start_link(fn -> 0 end, name: :agent_throw)
-      {:ok, _} = Medusa.consume("consume.also.retry", &MyModule.state/1, queue: "test_consumer_still_retry")
+      {:ok, _} = Medusa.consume("consume.also.retry",
+                                &MyModule.state/1,
+                                queue: "test_consumer_still_retry",
+                                max_retries: 10)
       Process.sleep(1_000)
       Medusa.publish("consume.also.retry", "retry_at_3", %{agent: :agent_throw, times: 3, throw: true})
       assert_receive %Message{body: "retry_at_3"}, 1_000
@@ -121,7 +130,9 @@ defmodule Medusa.Adapter.RabbitMQTest do
       # FIXME
       # cannot test for now, nack immediately requeue
       Agent.start(fn -> 0 end, name: :agent_error)
-      {:ok, _} = Medusa.consume("consume.always.error", &MyModule.state/1, queue: "test_consume_alway_error")
+      {:ok, _} = Medusa.consume("consume.always.error",
+                                &MyModule.state/1,
+                                queue: "test_consume_alway_error")
       Process.sleep(1_000)
       Medusa.publish("consume.always.error", "retry_at_20", %{agent: :agent_error, times: 20})
       refute_receive %Message{body: "retry_at_20"}, 1_000
