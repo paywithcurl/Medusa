@@ -20,6 +20,7 @@ defmodule Medusa.Broker do
   Sends to the matching routes the event, using the configured adapter.
   """
   def publish(event, payload, metadata \\ %{}) do
+    metadata = Map.put(metadata, :event, event)
     message = %Message{body: payload, metadata: metadata}
     Medusa.adapter.publish(event, message)
   end

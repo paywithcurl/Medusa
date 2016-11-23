@@ -72,6 +72,8 @@ defmodule Medusa do
     MedusaConfig.get_adapter(:medusa_config)
   end
 
+  def config, do: Application.get_env(:medusa, Medusa)
+
   defp child_adapter do
     adapter
     |> worker([])
