@@ -39,6 +39,7 @@ defmodule Medusa.Consumer.RabbitMQ do
     if Map.get(metadata, "retry", 1) < max_retry do
       do_event(message, state.function)
     else
+      Logger.warn("Failed processing message #{inspect message}")
       AMQP.Basic.nack(metadata["channel"], metadata["delivery_tag"])
     end
     {:noreply, [], state}
