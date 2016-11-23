@@ -91,12 +91,7 @@ defmodule Medusa.Consumer.RabbitMQ do
     message = update_in(message,
                         [Access.key(:metadata), "retry"],
                         &((&1 || 0) + 1))
-    time =
-      Medusa.config
-      |> Keyword.get(:retry_consumer_pow, 2)
-      |> :math.pow(message.metadata["retry"])
-      |> round
-      |> :timer.seconds
+    time = 2 |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
     Process.send_after(self, {:retry, message}, time)
   end
 

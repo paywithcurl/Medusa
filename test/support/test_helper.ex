@@ -12,9 +12,7 @@ defmodule Medusa.TestHelper do
       adapter: adapter,
       group: "test-rabbitmq",
       retry_publish_backoff: 500,
-      retry_publish_max: 1,
-      retry_consumer_max: 10,
-      retry_consumer_pow: 0
+      retry_publish_max: 1
     ]
     Application.put_env(:medusa, Medusa, opts, persistent: true)
     restart_app()
