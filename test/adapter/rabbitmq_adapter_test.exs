@@ -94,7 +94,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       {:ok, _} = Medusa.consume("consume.will.retry",
                                 &MyModule.state/1,
                                 queue: "test_consume_will_retry",
-                                max_retries: 10)
+                                max_retries: 1)
       Process.sleep(1_000)
       Medusa.publish("consume.will.retry", "retry_at_1", %{agent: :agent_ok, times: 1})
       assert_receive %Message{body: "retry_at_1"}, 5_000
@@ -103,39 +103,38 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "consume raise error will retry" do
       Agent.start_link(fn -> 0 end, name: :agent_raise)
-      {:ok, _} = Medusa.consume("consume.also.retry",
+      {:ok, _} = Medusa.consume("consume.raise.retry",
                                 &MyModule.state/1,
-                                queue: "test_consumer_also_retry",
+                                queue: "test_consumer_raise_retry",
                                 max_retries: 10)
       Process.sleep(1_000)
-      Medusa.publish("consume.also.retry", "retry_at_1", %{agent: :agent_raise, times: 1, raise: true})
+      Medusa.publish("consume.raise.retry", "retry_at_1", %{agent: :agent_raise, times: 1, raise: true})
       assert_receive %Message{body: "retry_at_1"}, 5_000
     end
 
     @tag :rabbitmq
     test "consume throw error will retry" do
       Agent.start_link(fn -> 0 end, name: :agent_throw)
-      {:ok, _} = Medusa.consume("consume.also.retry",
+      {:ok, _} = Medusa.consume("consume.throw.retry",
                                 &MyModule.state/1,
                                 queue: "test_consumer_still_retry",
                                 max_retries: 10)
       Process.sleep(1_000)
-      Medusa.publish("consume.also.retry", "retry_at_1", %{agent: :agent_throw, times: 1, throw: true})
+      Medusa.publish("consume.throw.retry", "retry_at_1", %{agent: :agent_throw, times: 1, throw: true})
       assert_receive %Message{body: "retry_at_1"}, 5_000
     end
 
     @tag :rabbitmq
-    @tag :skip
-    test "consume return :error retry until reach maximum before nack" do
-      # FIXME
-      # cannot test for now, nack immediately requeue
+    test "consume setting drop_on_failure return :error
+          retry until reach maximum before nack" do
       Agent.start(fn -> 0 end, name: :agent_error)
       {:ok, _} = Medusa.consume("consume.always.error",
                                 &MyModule.state/1,
-                                queue: "test_consume_alway_error")
+                                queue: "test_consume_alway_error",
+                                drop_on_failure: true)
       Process.sleep(1_000)
-      Medusa.publish("consume.always.error", "retry_at_20", %{agent: :agent_error, times: 20})
-      refute_receive %Message{body: "retry_at_20"}, 1_000
+      Medusa.publish("consume.always.error", "retry_at_1", %{agent: :agent_error, times: 10})
+      refute_receive %Message{body: "retry_at_1"}, 5_000
     end
 
   end

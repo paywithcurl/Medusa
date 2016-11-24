@@ -35,13 +35,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   def handle_info({:retry, %Message{metadata: metadata} = message}, state) do
-    max_retry = state.opts[:max_retries] || 1
-    if Map.get(metadata, "retry", 1) < max_retry do
-      do_event(message, state.function)
-    else
-      Logger.warn("Failed processing message #{inspect message}")
-      AMQP.Basic.nack(metadata["channel"], metadata["delivery_tag"])
-    end
+    do_event(message, state.function, state)
     {:noreply, [], state}
   end
 
@@ -61,7 +55,7 @@ defmodule Medusa.Consumer.RabbitMQ do
     Enum.each(events, fn event ->
       with %AMQP.Channel{} = chan <- event.metadata["channel"],
            tag when is_number(tag) <- event.metadata["delivery_tag"] do
-        do_event(event, f)
+        do_event(event, f, state)
       end
     end)
     if opts[:bind_once] do
@@ -71,29 +65,37 @@ defmodule Medusa.Consumer.RabbitMQ do
     end
   end
 
-  defp do_event(%{metadata: metadata} = message, function) do
+  defp do_event(%{metadata: metadata} = message, function, state) do
     try do
       case function.(message) do
-        :error ->
-          retry_event(message)
-        {:error, _} ->
-          retry_event(message)
-        _ ->
-          AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+        :error -> retry_event(message, state)
+        {:error, _} -> retry_event(message, state)
+        _ -> AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
       end
     rescue
-      _ -> retry_event(message)
+      _ -> retry_event(message, state)
     catch
-      _ -> retry_event(message)
+      _ -> retry_event(message, state)
     end
   end
 
-  defp retry_event(%Message{} = message) do
+  defp retry_event(%Message{metadata: metadata} = message, state) do
+    max_retries = state.opts[:max_retries] || 1
     message = update_in(message,
                         [Access.key(:metadata), "retry"],
                         &((&1 || 0) + 1))
-    time = 2 |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
-    Process.send_after(self, {:retry, message}, time)
+    if message.metadata["retry"] <= max_retries do
+      time = 2 |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
+      Process.send_after(self, {:retry, message}, time)
+    else
+      Logger.warn("Failed processing message #{inspect message}")
+      if state.opts[:drop_on_failure] do
+        Logger.warn("Dropping message #{inspect message}")
+        AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+      else
+        AMQP.Basic.nack(metadata["channel"], metadata["delivery_tag"])
+      end
+    end
   end
 
 end
