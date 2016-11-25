@@ -77,7 +77,7 @@ defmodule Medusa.Adapter.RabbitMQ do
     end
   end
 
-  def handle_call({:publish, event, payload}, _from, %{channel: chan} = state) do
+  def handle_call({:publish, event, payload}, _from, state) do
     Logger.debug("#{__MODULE__}: publish #{inspect event}: #{inspect payload}")
     case Poison.encode(payload) do
       {:ok, message} ->
@@ -87,10 +87,6 @@ defmodule Medusa.Adapter.RabbitMQ do
         Logger.warn("#{__MODULE__}: publish malformed message #{inspect payload}")
         {:reply, :error, state}
     end
-  end
-
-  def handle_call({:publish, _, _}, _from, state) do
-    {:reply, :error, state}
   end
 
   def handle_info(:republish, %{messages: {[], []}} = state) do

@@ -34,7 +34,7 @@ defmodule Medusa.Consumer.RabbitMQ do
     |> do_handle_events(state)
   end
 
-  def handle_info({:retry, %Message{metadata: metadata} = message}, state) do
+  def handle_info({:retry, %Message{} = message}, state) do
     do_event(message, state.function, state)
     {:noreply, [], state}
   end
@@ -53,7 +53,7 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_handle_events(events, %{function: f, opts: opts} = state) do
     Enum.each(events, fn event ->
-      with %AMQP.Channel{} = chan <- event.metadata["channel"],
+      with %AMQP.Channel{} <- event.metadata["channel"],
            tag when is_number(tag) <- event.metadata["delivery_tag"] do
         do_event(event, f, state)
       end
@@ -65,25 +65,31 @@ defmodule Medusa.Consumer.RabbitMQ do
     end
   end
 
-  defp do_event(%Message{metadata: metadata} = message, function, state) do
+  defp do_event(%Message{} = message, [function], state) do
     try do
       case function.(message) do
-        :ok ->
-          ack_message(message)
-        :error ->
-          retry_event(message, state)
-        {:error, _} ->
-          retry_event(message, state)
-        res ->
-          Logger.warn("Wrong return #{inspect res} from #{inspect function}")
-          drop_message(message)
+        :ok -> ack_message(message)
+        :error -> retry_event(message, state)
+        {:error, _} -> retry_event(message, state)
+        _ -> drop_message(message)
       end
     rescue
-      _ ->
-        retry_event(message, state)
+      _ -> retry_event(message, state)
     catch
-      _ ->
-        retry_event(message, state)
+      _ -> retry_event(message, state)
+    end
+  end
+
+  defp do_event(%Message{} = message, [function|tail], state) do
+    try do
+      case function.(message) do
+        new_message = %Message{} -> do_event(new_message, tail, state)
+        _ -> drop_or_requeue_message(message, state)
+      end
+    rescue
+      _ -> drop_or_requeue_message(message, state)
+    catch
+      _ -> drop_or_requeue_message(message, state)
     end
   end
 
@@ -92,16 +98,20 @@ defmodule Medusa.Consumer.RabbitMQ do
     message = update_in(message,
                         [Access.key(:metadata), "retry"],
                         &((&1 || 0) + 1))
-    if message.metadata["retry"] <= max_retries do
-      time = 2 |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
+    if metadata["retry"] <= max_retries do
+      time = 2 |> :math.pow(metadata["retry"]) |> round |> :timer.seconds
       Process.send_after(self, {:retry, message}, time)
     else
       Logger.warn("Failed processing message #{inspect message}")
-      if state.opts[:drop_on_failure] do
-        drop_message(message)
-      else
-        requeue_message(message)
-      end
+      drop_or_requeue_message(message, state)
+    end
+  end
+
+  defp drop_or_requeue_message(%Message{} = message, state) do
+    if state.opts[:drop_on_failure] do
+      drop_message(message)
+    else
+      requeue_message(message)
     end
   end
 
@@ -109,14 +119,14 @@ defmodule Medusa.Consumer.RabbitMQ do
     AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
   end
 
-  defp requeue_message(%Message{metadata: metadata}) do
+  defp requeue_message(%Message{metadata: metadata} = message) do
     Logger.warn("Requeueing message #{inspect message}")
     AMQP.Basic.nack(metadata["channel"],
                     metadata["delivery_tag"],
                     requeue: true)
   end
 
-  defp drop_message(%Message{metadata: metadata}) do
+  defp drop_message(%Message{metadata: metadata} = message) do
     Logger.warn("Dropping message #{inspect message}")
     AMQP.Basic.nack(metadata["channel"],
                     metadata["delivery_tag"],
