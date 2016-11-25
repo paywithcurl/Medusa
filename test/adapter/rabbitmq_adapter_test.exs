@@ -6,15 +6,11 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   setup do
     Process.register(self, :self)
+    put_adapter_config(Medusa.Adapter.RabbitMQ)
     :ok
   end
 
-  describe "RabbitMQ" do
-
-    setup do
-      put_adapter_config(Medusa.Adapter.RabbitMQ)
-      :ok
-    end
+  describe "RabbitMQ basic" do
 
     @tag :rabbitmq
     test "Send events" do
@@ -72,6 +68,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert length(producer_children()) == 1
     end
 
+  end
+
+  describe "RabbitMQ re-publish" do
+
     @tag :rabbitmq
     test "publish when no connection is queue and resend when re-connected" do
       Medusa.consume("publish.queue", &MyModule.echo/1, queue_name: "test_publish_queue")
@@ -86,6 +86,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert_receive %Message{body: "bar"}, 1_000
       assert_receive %Message{body: "baz"}, 1_000
     end
+
+  end
+
+  describe "RabbitMQ consume retry on failure" do
 
     @tag :rabbitmq
     test "consume return {:error, reason} will retry" do
@@ -137,6 +141,101 @@ defmodule Medusa.Adapter.RabbitMQTest do
       refute_receive %Message{body: "retry_at_1"}, 5_000
     end
 
+    @tag :rabbitmq
+    test "consume not return :ok, :error, {:error, reason} will
+          drop message immediately" do
+      Agent.start(fn -> 0 end, name: :agent_bad_return)
+      {:ok, _} = Medusa.consume("consume.bad_return",
+                                &MyModule.state/1)
+      Process.sleep(1_000)
+      Medusa.publish("consume.bad_return", "bad_return", %{agent: :agent_bad_return, times: 2, bad_return: true})
+      refute_receive %Message{body: "bad_return"}, 5_000
+    end
+
   end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many functions consumer do it in sequence" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many functions but in the middle is not return %Message{}
+          with drop_on_failure should drop immediately" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many functions but in the middle is not return %Message{}
+          with no drop_on_failure should nack message" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many functions but in the middle is raise
+          with no drop_on_failure should nack message" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many functions but in the middle is throw
+          with no drop_on_failure should nack message" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many functions last function not return :ok, :error or {:error, reason}
+          should drop it immediately" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function return :error
+          with drop_on_failure should drop immediately" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function return :error
+          with no drop_on_failure should nack message" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function return {:error, reason}
+          with drop_on_failure should drop immediately" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function return {:error, reason}
+          with no drop_on_failure should nack message" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function raise
+          with drop_on_failure should drop immediately" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function raise
+          with no drop_on_failure should nack message" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function throw
+          with drop_on_failure should drop immediately" do
+    end
+
+    @tag :rabbitmq
+    @tag :t
+    test "consume many function last function throw
+          with no drop_on_failure should nack message" do
+    end
+
 
 end

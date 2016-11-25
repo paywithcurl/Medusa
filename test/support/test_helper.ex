@@ -40,10 +40,17 @@ defmodule MyModule do
   def state(%{metadata: %{"agent" => agent, "times" => times} = metadata} = message) do
     val = agent |> String.to_atom |> Agent.get_and_update(&({&1, &1+1}))
     cond do
-      val == times -> :self |> Process.whereis |> send(message)
-      metadata["raise"] -> raise "Boom!"
-      metadata["throw"] -> throw "Bamm!"
-      true -> {:error, val}
+      metadata["bad_return"] ->
+        :bad_return
+      val == times ->
+        :self |> Process.whereis |> send(message)
+        :ok
+      metadata["raise"] ->
+        raise "Boom!"
+      metadata["throw"] ->
+        throw "Bamm!"
+      true ->
+        {:error, val}
     end
   end
 end

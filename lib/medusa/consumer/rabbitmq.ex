@@ -65,17 +65,25 @@ defmodule Medusa.Consumer.RabbitMQ do
     end
   end
 
-  defp do_event(%{metadata: metadata} = message, function, state) do
+  defp do_event(%Message{metadata: metadata} = message, function, state) do
     try do
       case function.(message) do
-        :error -> retry_event(message, state)
-        {:error, _} -> retry_event(message, state)
-        _ -> AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+        :ok ->
+          ack_message(message)
+        :error ->
+          retry_event(message, state)
+        {:error, _} ->
+          retry_event(message, state)
+        res ->
+          Logger.warn("Wrong return #{inspect res} from #{inspect function}")
+          drop_message(message)
       end
     rescue
-      _ -> retry_event(message, state)
+      _ ->
+        retry_event(message, state)
     catch
-      _ -> retry_event(message, state)
+      _ ->
+        retry_event(message, state)
     end
   end
 
@@ -90,12 +98,29 @@ defmodule Medusa.Consumer.RabbitMQ do
     else
       Logger.warn("Failed processing message #{inspect message}")
       if state.opts[:drop_on_failure] do
-        Logger.warn("Dropping message #{inspect message}")
-        AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+        drop_message(message)
       else
-        AMQP.Basic.nack(metadata["channel"], metadata["delivery_tag"])
+        requeue_message(message)
       end
     end
+  end
+
+  defp ack_message(%Message{metadata: metadata}) do
+    AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+  end
+
+  defp requeue_message(%Message{metadata: metadata}) do
+    Logger.warn("Requeueing message #{inspect message}")
+    AMQP.Basic.nack(metadata["channel"],
+                    metadata["delivery_tag"],
+                    requeue: true)
+  end
+
+  defp drop_message(%Message{metadata: metadata}) do
+    Logger.warn("Dropping message #{inspect message}")
+    AMQP.Basic.nack(metadata["channel"],
+                    metadata["delivery_tag"],
+                    requeue: false)
   end
 
 end
