@@ -12,7 +12,8 @@ defmodule Medusa.TestHelper do
       adapter: adapter,
       group: "test-rabbitmq",
       retry_publish_backoff: 500,
-      retry_publish_max: 1
+      retry_publish_max: 1,
+      retry_consume_pow_base: 0,
     ]
     Application.put_env(:medusa, Medusa, opts, persistent: true)
     restart_app()
@@ -29,12 +30,19 @@ defmodule Medusa.TestHelper do
 end
 
 defmodule MyModule do
+  alias Medusa.Broker.Message
+
   def echo(message) do
     :self |> Process.whereis |> send(message)
+    :ok
   end
 
   def error(_) do
     :error
+  end
+
+  def reverse(%Message{body: body} = message) do
+    %{message | body: String.reverse(body)}
   end
 
   def state(%{metadata: %{"agent" => agent, "times" => times} = metadata} = message) do
@@ -42,6 +50,8 @@ defmodule MyModule do
     cond do
       metadata["bad_return"] ->
         :bad_return
+      val == times && metadata["middleware"] ->
+        message
       val == times ->
         :self |> Process.whereis |> send(message)
         :ok

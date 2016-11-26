@@ -4,14 +4,42 @@ defmodule Medusa.Adapter.RabbitMQTest do
   alias Medusa.Broker.Message
   alias Medusa.Adapter.RabbitMQ
 
+  defp random_string do
+    32 |> :crypto.strong_rand_bytes |> Base.encode64
+  end
+
+  defp publish(functions, metadata, opts \\ []) do
+    agent_name = random_string() |> String.to_atom
+    body = random_string()
+    topic = random_string()
+    queue_name = random_string()
+    Agent.start(fn -> 0 end, name: agent_name)
+    Agent.update(:queues, &MapSet.put(&1, queue_name))
+    opts = Keyword.merge(opts, queue_name: queue_name)
+    {:ok, _} = Medusa.consume(topic, functions, opts)
+    Process.sleep(1_000)
+    Medusa.publish(topic, body, Map.merge(metadata, %{agent: agent_name}))
+    %{agent: agent_name, body: body}
+  end
+
+  setup_all do
+    put_adapter_config(Medusa.Adapter.RabbitMQ)
+    {:ok, conn} = AMQP.Connection.open()
+    {:ok, chan} = AMQP.Channel.open(conn)
+    {:ok, _} = Agent.start(fn -> MapSet.new() end, name: :queues)
+    on_exit fn ->
+      :queues
+      |> Agent.get(&(&1))
+      |> Enum.each(&AMQP.Queue.delete(chan, "test-rabbitmq.#{&1}"))
+    end
+  end
+
   setup do
     Process.register(self, :self)
-    put_adapter_config(Medusa.Adapter.RabbitMQ)
     :ok
   end
 
   describe "RabbitMQ basic" do
-
     @tag :rabbitmq
     test "Send events" do
       Medusa.consume("foo.bar", &MyModule.echo/1, queue_name: "echo")
@@ -33,6 +61,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     @tag :rabbitmq
+    @tag :skip
     test "Send event to consumer with bind_once: true.
           consumer and producer should die" do
       assert consumer_children() == []
@@ -52,6 +81,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     @tag :rabbitmq
+    @tag :skip
     test "Send event to consumer with bind_once: true should not kill other producer-consumer" do
       assert consumer_children() == []
       assert producer_children() == []
@@ -67,11 +97,9 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert length(consumer_children()) == 1
       assert length(producer_children()) == 1
     end
-
   end
 
   describe "RabbitMQ re-publish" do
-
     @tag :rabbitmq
     test "publish when no connection is queue and resend when re-connected" do
       Medusa.consume("publish.queue", &MyModule.echo/1, queue_name: "test_publish_queue")
@@ -86,156 +114,162 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert_receive %Message{body: "bar"}, 1_000
       assert_receive %Message{body: "baz"}, 1_000
     end
-
   end
 
-  describe "RabbitMQ consume retry on failure" do
 
+  describe "Retry on failrue within max_retries" do
     @tag :rabbitmq
-    test "consume return {:error, reason} will retry" do
-      Agent.start(fn -> 0 end, name: :agent_ok)
-      Process.sleep(1_000)
-      {:ok, _} = Medusa.consume("consume.will.retry",
-                                &MyModule.state/1,
-                                queue: "test_consume_will_retry",
-                                max_retries: 1)
-      Process.sleep(1_000)
-      Medusa.publish("consume.will.retry", "retry_at_1", %{agent: :agent_ok, times: 1})
-      assert_receive %Message{body: "retry_at_1"}, 5_000
+    test "{:error, reason} will retry" do
+      %{body: body} = publish(&MyModule.state/1, %{times: 1}, max_retries: 1)
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    test "consume raise error will retry" do
-      Agent.start_link(fn -> 0 end, name: :agent_raise)
-      {:ok, _} = Medusa.consume("consume.raise.retry",
-                                &MyModule.state/1,
-                                queue: "test_consumer_raise_retry",
-                                max_retries: 10)
-      Process.sleep(1_000)
-      Medusa.publish("consume.raise.retry", "retry_at_1", %{agent: :agent_raise, times: 1, raise: true})
-      assert_receive %Message{body: "retry_at_1"}, 5_000
+    test "raise will retry" do
+      %{body: body} = publish(&MyModule.state/1, %{times: 2, raise: true}, max_retries: 5)
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    test "consume throw error will retry" do
-      Agent.start_link(fn -> 0 end, name: :agent_throw)
-      {:ok, _} = Medusa.consume("consume.throw.retry",
-                                &MyModule.state/1,
-                                queue: "test_consumer_still_retry",
-                                max_retries: 10)
-      Process.sleep(1_000)
-      Medusa.publish("consume.throw.retry", "retry_at_1", %{agent: :agent_throw, times: 1, throw: true})
-      assert_receive %Message{body: "retry_at_1"}, 5_000
+    test "throw will retry" do
+      %{body: body} = publish(&MyModule.state/1, %{times: 5, throw: true}, max_retries: 10)
+      assert_receive %Message{body: ^body}
     end
-
-    @tag :rabbitmq
-    test "consume setting drop_on_failure return :error
-          retry until reach maximum before nack" do
-      Agent.start(fn -> 0 end, name: :agent_error)
-      {:ok, _} = Medusa.consume("consume.always.error",
-                                &MyModule.state/1,
-                                queue: "test_consume_alway_error",
-                                drop_on_failure: true)
-      Process.sleep(1_000)
-      Medusa.publish("consume.always.error", "retry_at_1", %{agent: :agent_error, times: 10})
-      refute_receive %Message{body: "retry_at_1"}, 5_000
-    end
-
-    @tag :rabbitmq
-    test "consume not return :ok, :error, {:error, reason} will
-          drop message immediately" do
-      Agent.start(fn -> 0 end, name: :agent_bad_return)
-      {:ok, _} = Medusa.consume("consume.bad_return",
-                                &MyModule.state/1)
-      Process.sleep(1_000)
-      Medusa.publish("consume.bad_return", "bad_return", %{agent: :agent_bad_return, times: 2, bad_return: true})
-      refute_receive %Message{body: "bad_return"}, 5_000
-    end
-
   end
 
+  describe "Drop message when reach max_retries" do
     @tag :rabbitmq
-    @tag :t
+    test "setting drop_on_failure retry until reach maximum before drop" do
+      %{body: _} = publish(&MyModule.state/1, %{times: 10}, drop_on_failure: true)
+      refute_receive %Message{}
+    end
+  end
+
+  describe "Requeue message when reach max_retries" do
+    @tag :rabbitmq
+    test "retry until reach maximum before requeue" do
+      %{body: body} = publish(&MyModule.state/1, %{times: 3}, drop_on_failure: false)
+    assert_receive %Message{body: ^body}
+    end
+  end
+
+  describe "Wrong return value" do
+    @tag :rabbitmq
+    test "not return :ok, :error, {:error, reason} will drop message immediately" do
+      %{body: _} = publish(&MyModule.state/1,
+                           %{times: 2, bad_return: true},
+                           drop_on_failure: false)
+      refute_receive %Message{}
+    end
+  end
+
+  describe "Multi functions in consume Success" do
+    @tag :rabbitmq
     test "consume many functions consumer do it in sequence" do
+      %{body: body} = publish([&MyModule.reverse/1, &MyModule.echo/1], %{}, drop_on_failure: true)
+      body = String.reverse(body)
+      assert_receive %Message{body: ^body}
+    end
+  end
+
+  describe "Multi functions in consume wrong failrue in the middle" do
+    @tag :rabbitmq
+    test "not return %Message{} with drop_on_failure should drop immediately" do
+      %{body: _} = publish([&MyModule.error/1, &MyModule.echo/1], %{}, drop_on_failure: true)
+      refute_receive %Message{}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many functions but in the middle is not return %Message{}
-          with drop_on_failure should drop immediately" do
+    test "not return %Message{} with no drop_on_failure should requeue" do
+      %{body: body} = publish([&MyModule.state/1, &MyModule.echo/1],
+                              %{times: 2, middleware: true},
+                              drop_on_failure: false)
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many functions but in the middle is not return %Message{}
-          with no drop_on_failure should nack message" do
+    test "raise with no drop_on_failure should requeue" do
+      %{body: body} = publish([&MyModule.state/1, &MyModule.echo/1],
+                              %{times: 2, middleware: true, raise: true})
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many functions but in the middle is raise
-          with no drop_on_failure should nack message" do
+    test "throw with no drop_on_failure should requeue" do
+      %{body: body} = publish([&MyModule.state/1, &MyModule.echo/1],
+                              %{times: 2, middleware: true, throw: true})
+      assert_receive %Message{body: ^body}
+    end
+  end
+
+  describe "Multi functions in consume failure in last function" do
+    @tag :rabbitmq
+    test "not return :ok, :error or {:error, reason} should drop it immediately" do
+      %{body: _} = publish([&MyModule.reverse/1, &MyModule.reverse/1], %{}, drop_on_failure: false)
+      refute_receive %Message{}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many functions but in the middle is throw
-          with no drop_on_failure should nack message" do
+    test ":error with drop_on_failure should drop immediately" do
+      %{body: _} = publish([&MyModule.reverse/1, &MyModule.error/1], %{}, drop_on_failure: true)
+      refute_receive %Message{}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many functions last function not return :ok, :error or {:error, reason}
-          should drop it immediately" do
+    test ":error with no drop_on_failure should requeue" do
+      %{body: body} = publish([&MyModule.reverse/1, &MyModule.state/1], %{times: 2})
+      body = String.reverse(body)
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many function last function return :error
-          with drop_on_failure should drop immediately" do
+    test "{:error, reason} with drop_on_failure should drop immediately after retries" do
+      %{body: _} = publish([&MyModule.reverse/1, &MyModule.state/1],
+                           %{times: 100},
+                           drop_on_failure: true)
+      refute_receive %Message{}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many function last function return :error
-          with no drop_on_failure should nack message" do
+    test "{:error, reason} with no drop_on_failure should requeue after retries" do
+      %{body: body} = publish([&MyModule.reverse/1, &MyModule.state/1],
+                              %{times: 5},
+                              max_retries: 3)
+      body = String.reverse(body)
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many function last function return {:error, reason}
-          with drop_on_failure should drop immediately" do
+    test "raise with drop_on_failure should drop immediately after retries" do
+      %{body: _} = publish([&MyModule.reverse/1, &MyModule.state/1],
+                              %{times: 5, raise: true},
+                              max_retries: 3, drop_on_failure: true)
+      refute_receive %Message{}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many function last function return {:error, reason}
-          with no drop_on_failure should nack message" do
+    test "raise with no drop_on_failure should requeue after retries" do
+      %{body: body} = publish([&MyModule.reverse/1, &MyModule.state/1],
+                              %{times: 5, raise: true},
+                              max_retries: 3, drop_on_failure: false)
+      body = String.reverse(body)
+      assert_receive %Message{body: ^body}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many function last function raise
-          with drop_on_failure should drop immediately" do
+    test "throw with drop_on_failure should drop immediately after retries" do
+      %{body: _} = publish([&MyModule.reverse/1, &MyModule.state/1],
+                              %{times: 5, throw: true},
+                              max_retries: 3, drop_on_failure: true)
+      refute_receive %Message{}
     end
 
     @tag :rabbitmq
-    @tag :t
-    test "consume many function last function raise
-          with no drop_on_failure should nack message" do
+    test "throw with no drop_on_failure should nack message" do
+      %{body: _} = publish([&MyModule.reverse/1, &MyModule.state/1],
+                              %{times: 5, throw: true},
+                              max_retries: 3, drop_on_failure: true)
+      refute_receive %Message{}
     end
-
-    @tag :rabbitmq
-    @tag :t
-    test "consume many function last function throw
-          with drop_on_failure should drop immediately" do
-    end
-
-    @tag :rabbitmq
-    @tag :t
-    test "consume many function last function throw
-          with no drop_on_failure should nack message" do
-    end
-
-
+  end
 end
