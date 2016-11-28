@@ -12,7 +12,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       |> String.to_atom
       |> Process.whereis
     params = %{
-      function: Keyword.fetch!(args, :function),
+      function: Keyword.fetch!(args, :function) |> List.wrap,
       to_link: to_link,
       opts: Keyword.get(args, :opts, [])
    }
@@ -34,8 +34,8 @@ defmodule Medusa.Consumer.RabbitMQ do
     |> do_handle_events(state)
   end
 
-  def handle_info({:retry, %Message{metadata: metadata} = message}, state) do
-    do_event(message, state.function, state)
+  def handle_info({:retry, %Message{} = message}, state) do
+    do_event(message, state.function, message, state)
     {:noreply, [], state}
   end
 
@@ -53,9 +53,9 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_handle_events(events, %{function: f, opts: opts} = state) do
     Enum.each(events, fn event ->
-      with %AMQP.Channel{} = chan <- event.metadata["channel"],
+      with %AMQP.Channel{} <- event.metadata["channel"],
            tag when is_number(tag) <- event.metadata["delivery_tag"] do
-        do_event(event, f, state)
+        do_event(event, f, event, state)
       end
     end)
     if opts[:bind_once] do
@@ -65,37 +65,73 @@ defmodule Medusa.Consumer.RabbitMQ do
     end
   end
 
-  defp do_event(%{metadata: metadata} = message, function, state) do
+  defp do_event(%Message{} = message, [function], original_message, state) do
     try do
       case function.(message) do
-        :error -> retry_event(message, state)
-        {:error, _} -> retry_event(message, state)
-        _ -> AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+        :ok -> ack_message(original_message)
+        :error -> retry_event(original_message, state)
+        {:error, reason} -> retry_event(original_message, state)
+        _ -> drop_message(original_message)
       end
     rescue
-      _ -> retry_event(message, state)
+      _ -> retry_event(original_message, state)
     catch
-      _ -> retry_event(message, state)
+      _ -> retry_event(original_message, state)
     end
   end
 
-  defp retry_event(%Message{metadata: metadata} = message, state) do
+  defp do_event(%Message{} = message, [function|tail], orig_message, state) do
+    try do
+      case function.(message) do
+        new = %Message{} -> do_event(new, tail, orig_message, state)
+        _ -> drop_or_requeue_message(orig_message, state)
+      end
+    rescue
+      _ -> drop_or_requeue_message(orig_message, state)
+    catch
+      _ -> drop_or_requeue_message(orig_message, state)
+    end
+  end
+
+  defp retry_event(%Message{} = message, state) do
     max_retries = state.opts[:max_retries] || 1
     message = update_in(message,
                         [Access.key(:metadata), "retry"],
                         &((&1 || 0) + 1))
     if message.metadata["retry"] <= max_retries do
-      time = 2 |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
+      base = Medusa.config |> Keyword.get(:retry_consume_pow_base, 2)
+      time = base |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
       Process.send_after(self, {:retry, message}, time)
     else
       Logger.warn("Failed processing message #{inspect message}")
-      if state.opts[:drop_on_failure] do
-        Logger.warn("Dropping message #{inspect message}")
-        AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
-      else
-        AMQP.Basic.nack(metadata["channel"], metadata["delivery_tag"])
-      end
+      drop_or_requeue_message(message, state)
     end
+  end
+
+  defp drop_or_requeue_message(%Message{} = message, state) do
+    if state.opts[:drop_on_failure] do
+      drop_message(message)
+    else
+      requeue_message(message)
+    end
+  end
+
+  defp ack_message(%Message{metadata: metadata}) do
+    AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+  end
+
+  defp requeue_message(%Message{metadata: metadata} = message) do
+    Logger.warn("Requeueing message #{inspect message}")
+    AMQP.Basic.nack(metadata["channel"],
+                    metadata["delivery_tag"],
+                    requeue: true)
+  end
+
+  defp drop_message(%Message{metadata: metadata} = message) do
+    Logger.warn("Dropping message #{inspect message}")
+    AMQP.Basic.nack(metadata["channel"],
+                    metadata["delivery_tag"],
+                    requeue: false)
   end
 
 end

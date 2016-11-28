@@ -49,9 +49,17 @@ defmodule Medusa do
     {:ok, supervisor}
   end
 
-  def consume(route, function, opts \\ []) do
-    {_, 1} =  :erlang.fun_info(function, :arity)
-    Medusa.Broker.new_route(route, function, opts)
+  def consume(route, functions, opts \\ []) do
+    functions
+    |> List.wrap
+    |> Enum.all?(&(:erlang.fun_info(&1, :arity)) |> elem(1) == 1)
+    |> case do
+      true ->
+        Medusa.Broker.new_route(route, functions, opts)
+      false ->
+        Logger.warn("consume function must have arity 1")
+        {:error, "arity must be 1"}
+    end
   end
 
   def publish(event, payload, metadata \\ %{}) do

@@ -27,8 +27,7 @@ defmodule MedusaTest do
   end
 
   test "Add invalid consumer" do
-    assert_raise MatchError, ~r/arity/,
-      fn -> Medusa.consume("foo.bob", fn -> IO.puts("blah") end) end
+    assert Medusa.consume("foo.bob", fn -> IO.puts("blah") end)
   end
 
   test "Don't publish when validator rejects message" do
