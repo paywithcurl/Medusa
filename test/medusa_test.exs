@@ -35,7 +35,7 @@ defmodule MedusaTest do
     MedusaConfig.set_message_validator(:medusa_config, validator)
     result = Medusa.publish "validator.rejected", %{}, %{}
     MedusaConfig.set_message_validator(:medusa_config, nil)
-    assert result == :failed
+    assert result == {:error, "message is invalid"}
   end
 
   test "Publish when validator accepts message" do

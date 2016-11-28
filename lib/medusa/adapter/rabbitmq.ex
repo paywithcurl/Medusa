@@ -67,10 +67,10 @@ defmodule Medusa.Adapter.RabbitMQ do
     opts = Keyword.put(opts, :queue_name, queue_name)
     with {:ok, p} <- Producer.start_child(event, opts),
          {:ok, _} <- Consumer.start_child(function, p, opts) do
-      {:reply, {:ok, p}, state}
+      {:reply, :ok, state}
     else
-      {:error, {:already_started, p}} ->
-        {:reply, {:ok, p}, state}
+      {:error, {:already_started, _}} ->
+        {:reply, :ok, state}
       error ->
         Logger.error("#{__MODULE__} new_route: #{inspect error}")
         {:reply, {:error, error}, state}
@@ -83,9 +83,9 @@ defmodule Medusa.Adapter.RabbitMQ do
       {:ok, message} ->
         {reply, new_state} = do_publish(event, message, 0, state)
         {:reply, reply, new_state}
-      {:error, _} ->
+      {:error, reason} ->
         Logger.warn("#{__MODULE__}: publish malformed message #{inspect payload}")
-        {:reply, :error, state}
+        {:reply, {:error, reason}, state}
     end
   end
 
