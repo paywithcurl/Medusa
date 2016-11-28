@@ -58,7 +58,7 @@ defmodule Medusa do
         Medusa.Broker.new_route(route, functions, opts)
       false ->
         Logger.warn("consume function must have arity 1")
-        :error
+        {:error, "arity must be 1"}
     end
   end
 

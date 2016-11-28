@@ -1,7 +1,7 @@
 %{"amqp": {:hex, :amqp, "0.1.5", "f38e30abfce06fd2213f5e24744a2923f9d3c30f1687db19952be547457e0e7b", [:mix], [{:amqp_client, "3.5.6", [hex: :amqp_client, optional: false]}]},
   "amqp_client": {:git, "https://github.com/dsrosario/amqp_client.git", "3b3086534875c783803fcef7c5befaddd57a4561", [branch: "erlang_otp_19"]},
   "connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [:mix], []},
-  "gen_stage": {:hex, :gen_stage, "0.4.3", "721a82a6c3de8438435ef1970d4942865afef5befb6f318055724b171860a8b4", [:mix], []},
+  "gen_stage": {:hex, :gen_stage, "0.8.0", "a76e3f0530f86fae8b8a1021c06527b1ec171cf4c0bdfecd8d5ad0376d1205af", [:mix], []},
   "poison": {:hex, :poison, "2.2.0", "4763b69a8a77bd77d26f477d196428b741261a761257ff1cf92753a0d4d24a63", [:mix], []},
   "rabbit_common": {:git, "https://github.com/jbrisbin/rabbit_common.git", "eea16abd375981d16595d2cefaac893c7281187b", [tag: "rabbitmq-3.5.6"]},
   "uuid": {:hex, :uuid, "1.1.5", "96cb36d86ee82f912efea4d50464a5df606bf3f1163d6bdbb302d98474969369", [:mix], []}}
