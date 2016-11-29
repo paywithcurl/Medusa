@@ -36,13 +36,16 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true.
           consumer and producer should die" do
-      assert {:ok, %{consumer: consumer, producer: producer}} =
-        Medusa.consume("local.bind1", &MyModule.echo/1, bind_once: true)
-      assert Process.alive?(consumer)
-      assert Process.alive?(producer)
+      assert consumer_children() == []
+      assert producer_children() == []
+      assert Medusa.consume("local.bind1", &MyModule.echo/1, bind_once: true)
+      [{_, consumer, _, _}] = consumer_children()
+      [{_, producer, _, _}] = producer_children()
+      Process.sleep(100)
       ref_consumer = Process.monitor(consumer)
       ref_producer = Process.monitor(producer)
-      Process.sleep(100)
+      assert Process.alive?(consumer)
+      assert Process.alive?(producer)
       Medusa.publish("local.bind1", "die both")
       assert_receive %Message{body: "die both"}
       assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}
@@ -51,19 +54,19 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true in already exists route
           So producer is shared with others then it should not die" do
-      assert {:ok, %{consumer: con1, producer: producer}} =
-        Medusa.consume("local.bind2", &MyModule.echo/1)
-      assert {:ok, %{consumer: con2, producer: ^producer}} =
-        Medusa.consume("local.bind2", &MyModule.echo/1, bind_once: true)
-      workers = Supervisor.which_children(Medusa.ConsumerSupervisor)
-      assert {:undefined, con1, :worker, [Medusa.Consumer.PG2]} in workers
-      assert {:undefined, con2, :worker, [Medusa.Consumer.PG2]} in workers
-      assert Process.alive?(con1)
-      assert Process.alive?(con2)
-      assert Process.alive?(producer)
+      assert consumer_children() == []
+      assert producer_children() == []
+      assert Medusa.consume("local.bind2", &MyModule.echo/1)
+      assert Medusa.consume("local.bind2", &MyModule.echo/1, bind_once: true)
+      [{_, con1, _, _}, {_, con2, _, _}] = consumer_children()
+      [{_, producer, _, _}] = producer_children()
+      Process.sleep(100)
       ref_con1 = Process.monitor(con1)
       ref_con2 = Process.monitor(con2)
       ref_prod = Process.monitor(producer)
+      assert Process.alive?(con1)
+      assert Process.alive?(con2)
+      assert Process.alive?(producer)
       Process.sleep(100)
       Medusa.publish("local.bind2", "only con2 die")
       assert_receive %Message{body: "only con2 die"}
@@ -75,13 +78,12 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true and then
           start consume with long-running consumer, producer should survive" do
-      assert {:ok, %{consumer: con1, producer: producer}} =
-         Medusa.consume("local.bind3", &MyModule.echo/1, bind_once: true)
-      assert {:ok, %{consumer: con2, producer: ^producer}} =
-         Medusa.consume("local.bind3", &MyModule.echo/1)
-      workers = Supervisor.which_children(Medusa.ConsumerSupervisor)
-      assert {:undefined, con1, :worker, [Medusa.Consumer.PG2]} in workers
-      assert {:undefined, con2, :worker, [Medusa.Consumer.PG2]} in workers
+      assert consumer_children() == []
+      assert producer_children() == []
+      assert Medusa.consume("local.bind3", &MyModule.echo/1, bind_once: true)
+      assert Medusa.consume("local.bind3", &MyModule.echo/1)
+      [{_, con1, _, _}, {_, con2, _, _}] = consumer_children()
+      [{_, producer, _, _}] = producer_children()
       assert Process.alive?(con1)
       assert Process.alive?(con2)
       assert Process.alive?(producer)

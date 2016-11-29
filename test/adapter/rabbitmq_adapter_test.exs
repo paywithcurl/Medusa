@@ -16,7 +16,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     Agent.start(fn -> 0 end, name: agent_name)
     Agent.update(:queues, &MapSet.put(&1, queue_name))
     opts = Keyword.merge(opts, queue_name: queue_name)
-    {:ok, _} = Medusa.consume(topic, functions, opts)
+    :ok = Medusa.consume(topic, functions, opts)
     Process.sleep(1_000)
     Medusa.publish(topic, body, Map.merge(metadata, %{agent: agent_name}))
     %{agent: agent_name, body: body}

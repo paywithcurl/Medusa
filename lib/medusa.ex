@@ -70,9 +70,9 @@ defmodule Medusa do
 
     case is_message_valid?(event, payload, metadata) do
       true -> Medusa.Broker.publish(event, payload, metadata)
-      _ ->
+      false ->
         Logger.warn "Message failed validation #{event} #{inspect payload} #{inspect metadata}"
-        :failed
+        {:error, "message is invalid"}
     end
   end
 
