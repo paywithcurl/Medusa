@@ -61,10 +61,8 @@ defmodule Medusa do
 
   def publish(event, payload, metadata \\ %{}, opts \\ []) do
     metadata = Map.merge(%{id: UUID.uuid4}, metadata)
-    Keyword.get(opts, :message_validators, [])
-    |> List.wrap
-    |> List.insert_at(0, MedusaConfig.get_message_validator(:medusa_config))
-    |> Enum.reject(&!is_function(&1))  # FIXME only global
+    opts
+    |> Keyword.get(:message_validators, [])
     |> validate_message(event, payload, metadata)
     |> case do
       :ok ->
@@ -80,6 +78,44 @@ defmodule Medusa do
   end
 
   def config, do: Application.get_env(:medusa, Medusa)
+
+  @doc """
+  Validate message againts list of functions.
+  function must be arity/3 (event, payload, metadata).
+  return :ok if valid and {:error, reason} if invalid.
+  validate_message always execute global_validator first if provided.
+  global_validator set by
+
+      config :medusa, Medusa,
+        validate_message: &function/3
+  """
+  def validate_message(functions, event, payload, metadata) do
+    global_validator = MedusaConfig.get_message_validator(:medusa_config)
+    functions = List.wrap(functions)
+    functions =
+      if is_function(global_validator) do
+        [global_validator|functions]
+      end
+    do_validate_message(functions, event, payload, metadata)
+  end
+
+  def do_validate_message([], _, _, _) do
+    :ok
+  end
+
+  def do_validate_message([funciton|tail], event, payload, metadata)
+  when is_function(funciton) do
+    case apply(funciton, [event, payload, metadata]) do
+      :ok -> do_validate_message(tail, event, payload, metadata)
+      {:error, reason} -> {:error, reason}
+      reason -> {:error, reason}
+    end
+  end
+
+  def do_validate_message(_, _, _, _) do
+    {:error, "validator is not a function"}
+  end
+
 
   defp child_adapter do
     adapter
@@ -131,22 +167,4 @@ defmodule Medusa do
   defp validate_consume_function(_) do
     {:error, "consume must be function"}
   end
-
-  defp validate_message([], _, _, _) do
-    :ok
-  end
-
-  defp validate_message([funciton|tail], event, payload, metadata)
-  when is_function(funciton) do
-    case apply(funciton, [event, payload, metadata]) do
-      :ok -> validate_message(tail, event, payload, metadata)
-      {:error, reason} -> {:error, reason}
-      reason -> {:error, reason}
-    end
-  end
-
-  defp validate_message(_, _, _, _) do
-    {:error, "validator is not a function"}
-  end
-
 end
