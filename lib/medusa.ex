@@ -91,10 +91,10 @@ defmodule Medusa do
   """
   def validate_message(functions, event, payload, metadata) do
     global_validator = MedusaConfig.get_message_validator(:medusa_config)
-    functions = List.wrap(functions)
     functions =
-      if is_function(global_validator) do
-        [global_validator|functions]
+      cond do
+        is_function(global_validator) -> [global_validator|List.wrap(functions)]
+        true -> List.wrap(functions)
       end
     do_validate_message(functions, event, payload, metadata)
   end
