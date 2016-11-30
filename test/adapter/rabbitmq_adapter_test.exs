@@ -257,45 +257,53 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
   describe "Validators" do
+    @tag :rabbitmq
     test "Only global validator and :ok" do
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
       %{body: body} = publish_consume(&MyModule.echo/1)
       assert_receive %Message{body: ^body}, 1_000
     end
 
+    @tag :rabbitmq
     test "Only global validator and {:error, reason}" do
       MedusaConfig.set_message_validator(:medusa_config, &always_error/3)
       %{body: _} = publish_consume(&MyModule.echo/1)
       refute_receive %Message{}, 1_000
     end
 
+    @tag :rabbitmq
     test "With 1 extra validator and both: ok" do
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
       %{body: body} = publish_consume(&MyModule.echo/1, %{}, message_validators: &always_ok/3)
       assert_receive %Message{body: ^body}, 1_000
     end
 
+    @tag :rabbitmq
     test "With only extra validator and :ok" do
       %{body: body} = publish_consume(&MyModule.echo/1, %{}, message_validators: &always_ok/3)
       assert_receive %Message{body: ^body}, 1_000
     end
 
+    @tag :rabbitmq
     test "With list of extra validators and all :ok" do
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
       %{body: body} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_ok/3, &always_ok/3])
       assert_receive %Message{body: ^body}, 1_000
     end
 
+    @tag :rabbitmq
     test "With error extra validator in the middle" do
       %{body: _} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_error/3, &always_ok/3])
       refute_receive %Message{}, 1_000
     end
 
+    @tag :rabbitmq
     test "With error extra validator in the end" do
       %{body: _} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_ok/3, &always_error/3])
       refute_receive %Message{}, 1_000
     end
 
+    @tag :rabbitmq
     test "With error extra validator in the global" do
       MedusaConfig.set_message_validator(:medusa_config, &always_error/3)
       %{body: _} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_ok/3, &always_ok/3])
