@@ -62,13 +62,14 @@ defmodule Medusa do
     end
   end
 
-  def publish(event, payload, metadata \\ %{}) do
-    metadata = cond do
-      Map.has_key?(metadata, :id) -> metadata
-      true -> Map.put(metadata, :id, UUID.uuid4)
-    end
-
-    case validate_message(event, payload, metadata) do
+  def publish(event, payload, metadata \\ %{}, opts \\ []) do
+    metadata = Map.merge(%{id: UUID.uuid4}, metadata)
+    Keyword.get(opts, :message_validators, [])
+    |> List.wrap
+    |> List.insert_at(0, MedusaConfig.get_message_validator(:medusa_config))
+    |> Enum.reject(&!is_function(&1))
+    |> validate_message(event, payload, metadata)
+    |> case do
       :ok ->
         Medusa.Broker.publish(event, payload, metadata)
       {:error, reason} ->
@@ -115,15 +116,21 @@ defmodule Medusa do
     end
   end
 
-  defp validate_message(event, payload, metadata) do
-    with f when is_function(f) <- MedusaConfig.get_message_validator(:medusa_config),
-         :ok <- f.(event, payload, metadata) do
-      :ok
-    else
-      nil -> :ok
+  defp validate_message([], _, _, _) do
+    :ok
+  end
+
+  defp validate_message([funciton|tail], event, payload, metadata)
+  when is_function(funciton) do
+    case apply(funciton, [event, payload, metadata]) do
+      :ok -> validate_message(tail, event, payload, metadata)
       {:error, reason} -> {:error, reason}
       reason -> {:error, reason}
     end
+  end
+
+  defp validate_message(_, _, _, _) do
+    {:error, "validator is not a function"}
   end
 
 end

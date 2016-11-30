@@ -60,12 +60,59 @@ defmodule MedusaTest do
     assert result == :ok
   end
 
-  defp ensures_id_1234(_, _, %{id: 1234}) do
-    :ok
+  test "Publish with 1 extra validator" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+    metadata = %{id: 1234}
+    opts = [message_validators: &ensures_id_1234/3]
+    result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+    assert result == :ok
   end
 
-  defp ensures_id_present(_, _, %{id: _}) do
-    :ok
+  test "Publish with only extra validator" do
+    metadata = %{id: 1234}
+    opts = [message_validators: &ensures_id_1234/3]
+    result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+    assert result == :ok
   end
+
+  test "Publish with list of extra validators" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+    metadata = %{id: 1234}
+    opts = [message_validators: [&ensures_id_1234/3, &always_ok/3]]
+    result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+    assert result == :ok
+  end
+
+  test "Publish with error extra validator in the middle" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+    metadata = %{}
+    opts = [message_validators: [&ensures_id_1234/3, &always_ok/3]]
+    result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+    assert result == {:error, "message is invalid"}
+  end
+
+  test "Publish with error extra validator in the end" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+    metadata = %{}
+    opts = [message_validators: [&always_ok/3, &ensures_id_1234/3]]
+    result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+    assert result == {:error, "message is invalid"}
+  end
+
+  test "Publish with error extra validator in the global" do
+    MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/3)
+    metadata = %{}
+    opts = [message_validators: [&always_ok/3, &ensures_id_present/3]]
+    result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+    assert result == {:error, "message is invalid"}
+  end
+
+  defp ensures_id_1234(_, _, %{id: 1234}), do: :ok
+
+  defp ensures_id_1234(_, _, _), do: {:error, "id not matched"}
+
+  defp ensures_id_present(_, _, %{id: _}), do: :ok
+
+  defp always_ok(_, _, _), do: :ok
 
 end
