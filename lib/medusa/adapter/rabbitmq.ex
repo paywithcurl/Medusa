@@ -217,7 +217,7 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   defp do_publish(event, message, times, %{messages: messages} = state) do
     new_messages = :queue.in({event, message, times}, messages)
-    {:error, %{state | messages: new_messages}}
+    {{:error, "cannot connect rabbitmq"}, %{state | messages: new_messages}}
   end
 
   defp random_name(len \\ 8) do

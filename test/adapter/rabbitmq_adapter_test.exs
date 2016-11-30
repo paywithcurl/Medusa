@@ -4,24 +4,6 @@ defmodule Medusa.Adapter.RabbitMQTest do
   alias Medusa.Broker.Message
   alias Medusa.Adapter.RabbitMQ
 
-  defp random_string do
-    32 |> :crypto.strong_rand_bytes |> Base.encode64
-  end
-
-  defp publish_consume(functions, metadata, opts \\ []) do
-    agent_name = random_string() |> String.to_atom
-    body = random_string()
-    topic = random_string()
-    queue_name = random_string()
-    Agent.start(fn -> 0 end, name: agent_name)
-    Agent.update(:queues, &MapSet.put(&1, queue_name))
-    opts = Keyword.merge(opts, queue_name: queue_name)
-    :ok = Medusa.consume(topic, functions, opts)
-    Process.sleep(1_000)
-    Medusa.publish(topic, body, Map.merge(metadata, %{agent: agent_name}))
-    %{agent: agent_name, body: body}
-  end
-
   setup_all do
     put_adapter_config(Medusa.Adapter.RabbitMQ)
     {:ok, conn} = AMQP.Connection.open()
@@ -35,6 +17,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
   setup do
+    MedusaConfig.set_message_validator(:medusa_config, nil)
     Process.register(self, :self)
     :ok
   end
@@ -47,9 +30,9 @@ defmodule Medusa.Adapter.RabbitMQTest do
       Medusa.consume("foo.baz", &MyModule.echo/1)
       Process.sleep(1_000) # wait RabbitMQ connection
       Medusa.publish("foo.bar", "foobar", %{"optional_field" => "nice_to_have"})
-      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
-      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
-      refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
+      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}, 1_000
+      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}, 1_000
+      refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}, 1_000
     end
 
     @tag :rabbitmq
@@ -57,7 +40,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       Medusa.consume("ping.pong", &MyModule.echo/1)
       Process.sleep(1_000) # wait RabbitMQ connection
       Medusa.publish("ping", "ping")
-      refute_receive %Message{body: "ping"}
+      refute_receive %Message{body: "ping"}, 1_000
     end
 
     @tag :rabbitmq
@@ -75,9 +58,9 @@ defmodule Medusa.Adapter.RabbitMQTest do
       ref_consumer = Process.monitor(consumer)
       ref_producer = Process.monitor(producer)
       Medusa.publish("rabbit.bind1", "die both")
-      assert_receive %Message{body: "die both"}
-      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}
-      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}
+      assert_receive %Message{body: "die both"}, 1_000
+      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}, 1_000
+      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}, 1_000
     end
 
     @tag :rabbitmq
@@ -91,8 +74,8 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert length(consumer_children()) == 2
       assert length(producer_children()) == 2
       Medusa.publish("rabbit.bind2", "only con2, prod2 die")
-      assert_receive %Message{body: "only con2, prod2 die"}
-      assert_receive %Message{body: "only con2, prod2 die"}
+      assert_receive %Message{body: "only con2, prod2 die"}, 1_000
+      assert_receive %Message{body: "only con2, prod2 die"}, 1_000
       Process.sleep(10)
       assert length(consumer_children()) == 1
       assert length(producer_children()) == 1
@@ -106,9 +89,9 @@ defmodule Medusa.Adapter.RabbitMQTest do
       adapter = RabbitMQ |> Process.whereis
       path = [ Access.key(:mod_state), Access.key(:channel) ]
       :sys.replace_state(adapter, &put_in(&1, path, nil))
-      assert Medusa.publish("publish.queue", "foo") == :error  # can't publish right now
-      assert Medusa.publish("publish.queue", "bar") == :error  # can't publish right now
-      assert Medusa.publish("publish.queue", "baz") == :error  # can't publish right now
+      assert Medusa.publish("publish.queue", "foo") == {:error, "cannot connect rabbitmq"}  # can't publish right now
+      assert Medusa.publish("publish.queue", "bar") == {:error, "cannot connect rabbitmq"}  # can't publish right now
+      assert Medusa.publish("publish.queue", "baz") == {:error, "cannot connect rabbitmq"}  # can't publish right now
       send(adapter, {:DOWN, make_ref(), :process, self, :test})
       assert_receive %Message{body: "foo"}, 1_000
       assert_receive %Message{body: "bar"}, 1_000
@@ -121,19 +104,19 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "{:error, reason} will retry" do
       %{body: body} = publish_consume(&MyModule.state/1, %{times: 1}, max_retries: 1)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
     test "raise will retry" do
       %{body: body} = publish_consume(&MyModule.state/1, %{times: 2, raise: true}, max_retries: 5)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
     test "throw will retry" do
       %{body: body} = publish_consume(&MyModule.state/1, %{times: 5, throw: true}, max_retries: 10)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
   end
 
@@ -141,7 +124,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "setting drop_on_failure retry until reach maximum before drop" do
       %{body: _} = publish_consume(&MyModule.state/1, %{times: 10}, drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
   end
 
@@ -149,7 +132,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "retry until reach maximum before requeue" do
       %{body: body} = publish_consume(&MyModule.state/1, %{times: 3}, drop_on_failure: false)
-    assert_receive %Message{body: ^body}
+    assert_receive %Message{body: ^body}, 1_000
     end
   end
 
@@ -159,7 +142,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: _} = publish_consume(&MyModule.state/1,
                            %{times: 2, bad_return: true},
                            drop_on_failure: false)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
   end
 
@@ -168,7 +151,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "consume many functions consumer do it in sequence" do
       %{body: body} = publish_consume([&MyModule.reverse/1, &MyModule.echo/1], %{}, drop_on_failure: true)
       body = String.reverse(body)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
   end
 
@@ -176,7 +159,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "not return %Message{} with drop_on_failure should drop immediately" do
       %{body: _} = publish_consume([&MyModule.error/1, &MyModule.echo/1], %{}, drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
 
     @tag :rabbitmq
@@ -184,21 +167,21 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
                               %{times: 2, middleware: true},
                               drop_on_failure: false)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
     test "raise with no drop_on_failure should requeue" do
       %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
                               %{times: 2, middleware: true, raise: true})
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
     test "throw with no drop_on_failure should requeue" do
       %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
                               %{times: 2, middleware: true, throw: true})
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
   end
 
@@ -206,20 +189,20 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "not return :ok, :error or {:error, reason} should drop it immediately" do
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.reverse/1], %{}, drop_on_failure: false)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
 
     @tag :rabbitmq
     test ":error with drop_on_failure should drop immediately" do
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.error/1], %{}, drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
 
     @tag :rabbitmq
     test ":error with no drop_on_failure should requeue" do
       %{body: body} = publish_consume([&MyModule.reverse/1, &MyModule.state/1], %{times: 2})
       body = String.reverse(body)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
@@ -227,7 +210,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                            %{times: 100},
                            drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
 
     @tag :rabbitmq
@@ -236,7 +219,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
                               %{times: 5},
                               max_retries: 3)
       body = String.reverse(body)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
@@ -244,7 +227,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                               %{times: 5, raise: true},
                               max_retries: 3, drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
 
     @tag :rabbitmq
@@ -253,7 +236,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
                               %{times: 5, raise: true},
                               max_retries: 3, drop_on_failure: false)
       body = String.reverse(body)
-      assert_receive %Message{body: ^body}
+      assert_receive %Message{body: ^body}, 1_000
     end
 
     @tag :rabbitmq
@@ -261,7 +244,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                               %{times: 5, throw: true},
                               max_retries: 3, drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
 
     @tag :rabbitmq
@@ -269,7 +252,77 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                               %{times: 5, throw: true},
                               max_retries: 3, drop_on_failure: true)
-      refute_receive %Message{}
+      refute_receive %Message{}, 1_000
     end
   end
+
+  describe "Validators" do
+    test "Only global validator and :ok" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
+      %{body: body} = publish_consume(&MyModule.echo/1)
+      assert_receive %Message{body: ^body}, 1_000
+    end
+
+    test "Only global validator and {:error, reason}" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_error/3)
+      %{body: _} = publish_consume(&MyModule.echo/1)
+      refute_receive %Message{}, 1_000
+    end
+
+    test "With 1 extra validator and both: ok" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
+      %{body: body} = publish_consume(&MyModule.echo/1, %{}, message_validators: &always_ok/3)
+      assert_receive %Message{body: ^body}, 1_000
+    end
+
+    test "With only extra validator and :ok" do
+      %{body: body} = publish_consume(&MyModule.echo/1, %{}, message_validators: &always_ok/3)
+      assert_receive %Message{body: ^body}, 1_000
+    end
+
+    test "With list of extra validators and all :ok" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
+      %{body: body} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_ok/3, &always_ok/3])
+      assert_receive %Message{body: ^body}, 1_000
+    end
+
+    test "With error extra validator in the middle" do
+      %{body: _} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_error/3, &always_ok/3])
+      refute_receive %Message{}, 1_000
+    end
+
+    test "With error extra validator in the end" do
+      %{body: _} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_ok/3, &always_error/3])
+      refute_receive %Message{}, 1_000
+    end
+
+    test "With error extra validator in the global" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_error/3)
+      %{body: _} = publish_consume(&MyModule.echo/1, %{}, message_validators: [&always_ok/3, &always_ok/3])
+      refute_receive %Message{}, 1_000
+    end
+  end
+
+  defp always_ok(_event, _message, _metadata), do: :ok
+
+  defp always_error(_event, _message, _metadata), do: :error
+
+  defp random_string do
+    32 |> :crypto.strong_rand_bytes |> Base.encode64
+  end
+
+  defp publish_consume(functions, metadata \\ %{}, opts \\ []) do
+    agent_name = random_string() |> String.to_atom
+    body = random_string()
+    topic = random_string()
+    queue_name = random_string()
+    Agent.start(fn -> 0 end, name: agent_name)
+    Agent.update(:queues, &MapSet.put(&1, queue_name))
+    opts = Keyword.merge(opts, queue_name: queue_name)
+    :ok = Medusa.consume(topic, functions, opts)
+    Process.sleep(1_000)
+    Medusa.publish(topic, body, Map.merge(metadata, %{agent: agent_name}))
+    %{agent: agent_name, body: body}
+  end
+
 end

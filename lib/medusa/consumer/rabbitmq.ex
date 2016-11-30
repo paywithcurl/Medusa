@@ -7,10 +7,7 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   def start_link(args) do
     to_link =
-      args
-      |> get_in([:opts, :queue_name])
-      |> String.to_atom
-      |> Process.whereis
+      args |> get_in([:opts, :queue_name]) |> String.to_atom |> Process.whereis
     params = %{
       function: Keyword.fetch!(args, :function) |> List.wrap,
       to_link: to_link,
@@ -29,9 +26,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   """
   def handle_events(events, _from, state) do
     Logger.debug("#{__MODULE__} Received event: #{inspect events}")
-    events
-    |> List.flatten
-    |> do_handle_events(state)
+    events |> List.flatten |> do_handle_events(state)
   end
 
   def handle_info({:retry, %Message{} = message}, state) do
@@ -53,9 +48,19 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_handle_events(events, %{function: f, opts: opts} = state) do
     Enum.each(events, fn event ->
-      with %AMQP.Channel{} <- event.metadata["channel"],
-           tag when is_number(tag) <- event.metadata["delivery_tag"] do
+      metadata = event.metadata
+      with %AMQP.Channel{} <- metadata["channel"],
+           tag when is_number(tag) <- metadata["delivery_tag"],
+           validators <- Keyword.get(opts, :message_validators, []),
+           :ok <- Medusa.validate_message(validators,
+                                          metadata["event"],
+                                          event.body,
+                                          metadata) do
         do_event(event, f, event, state)
+      else
+        {:error, reason} ->
+          Logger.warn "Message failed validation #{inspect reason}: #{inspect event}"
+          {:error, "message is invalid"}
       end
     end)
     if opts[:bind_once] do

@@ -99,24 +99,6 @@ defmodule Medusa do
     do_validate_message(functions, event, payload, metadata)
   end
 
-  def do_validate_message([], _, _, _) do
-    :ok
-  end
-
-  def do_validate_message([funciton|tail], event, payload, metadata)
-  when is_function(funciton) do
-    case apply(funciton, [event, payload, metadata]) do
-      :ok -> do_validate_message(tail, event, payload, metadata)
-      {:error, reason} -> {:error, reason}
-      reason -> {:error, reason}
-    end
-  end
-
-  def do_validate_message(_, _, _, _) do
-    {:error, "validator is not a function"}
-  end
-
-
   defp child_adapter do
     adapter
     |> worker([])
@@ -167,4 +149,22 @@ defmodule Medusa do
   defp validate_consume_function(_) do
     {:error, "consume must be function"}
   end
+
+  defp do_validate_message([], _, _, _) do
+    :ok
+  end
+
+  defp do_validate_message([function|tail], event, payload, metadata)
+  when is_function(function) do
+    case apply(function, [event, payload, metadata]) do
+      :ok -> do_validate_message(tail, event, payload, metadata)
+      {:error, reason} -> {:error, reason}
+      reason -> {:error, reason}
+    end
+  end
+
+  defp do_validate_message(_, _, _, _) do
+    {:error, "validator is not a function"}
+  end
+
 end
