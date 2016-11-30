@@ -50,18 +50,12 @@ defmodule Medusa do
   end
 
   def consume(route, functions, opts \\ []) do
-    test_fun = fn f ->
-      is_function(f) && :erlang.fun_info(f, :arity) == {:arity, 1}
-    end
-    functions
-    |> List.wrap
-    |> Enum.all?(test_fun)
-    |> case do
-      true ->
+    case validate_consume_function(functions) do
+      :ok ->
         Medusa.Broker.new_route(route, functions, opts)
-      false ->
-        Logger.warn("consume function must have arity 1")
-        {:error, "arity must be 1"}
+      {:error, reason} ->
+        Logger.warn("#{inspect reason}")
+        {:error, reason}
     end
   end
 
@@ -70,7 +64,7 @@ defmodule Medusa do
     Keyword.get(opts, :message_validators, [])
     |> List.wrap
     |> List.insert_at(0, MedusaConfig.get_message_validator(:medusa_config))
-    |> Enum.reject(&!is_function(&1))
+    |> Enum.reject(&!is_function(&1))  # FIXME only global
     |> validate_message(event, payload, metadata)
     |> case do
       :ok ->
@@ -117,6 +111,25 @@ defmodule Medusa do
         new_app_config = Keyword.merge(app_config, [adapter: @default_adapter])
         Application.put_env(:medusa, Medusa, new_app_config, persistent: true)
     end
+  end
+
+  defp validate_consume_function(function) when is_function(function) do
+    validate_consume_function([function])
+  end
+
+  defp validate_consume_function([]) do
+    :ok
+  end
+
+  defp validate_consume_function([function|tail]) when is_function(function) do
+    case :erlang.fun_info(function, :arity) do
+      {:arity, 1} -> validate_consume_function(tail)
+      _ -> {:error, "arity must be 1"}
+    end
+  end
+
+  defp validate_consume_function(_) do
+    {:error, "consume must be function"}
   end
 
   defp validate_message([], _, _, _) do

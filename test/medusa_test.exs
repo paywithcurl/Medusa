@@ -1,5 +1,6 @@
 defmodule MedusaTest do
   use ExUnit.Case
+  alias Medusa.Broker.Message
   doctest Medusa
 
   test "not config should fallback to default" do
@@ -19,6 +20,11 @@ defmodule MedusaTest do
   end
 
   describe "Consumer" do
+    setup do
+      Process.register(self, :self)
+      :ok
+    end
+
     test "Add consumers" do
       before = Medusa.ConsumerSupervisor |> Supervisor.which_children |> length
       Medusa.consume("foo.bob", &IO.puts/1)
@@ -45,12 +51,28 @@ defmodule MedusaTest do
     end
 
     test "Only global validator and :ok" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
+      Medusa.consume("foo.bar", &MyModule.echo/1)
+      message = random_message()
+      Medusa.publish("foo.bar", message)
+      assert_receive %Message{body: ^message}
     end
 
     test "Only global validator and {:error, reason}" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_error/3)
+      Medusa.consume("foo.bar", &MyModule.echo/1)
+      message = random_message()
+      Medusa.publish("foo.bar", message)
+      refute_receive %Message{}
     end
 
+    @tag :t
     test "With 1 extra validator and both: ok" do
+      MedusaConfig.set_message_validator(:medusa_config, &always_ok/3)
+      Medusa.consume("foo.bar", &MyModule.echo/1, message_validators: &always_error/3)
+      message = random_message()
+      Medusa.publish("foo.bar", message)
+      assert_receive %Message{body: ^message}
     end
 
     test "With only extra validator and :ok" do
@@ -155,5 +177,11 @@ defmodule MedusaTest do
   defp ensures_id_present(_, _, %{id: _}), do: :ok
 
   defp always_ok(_, _, _), do: :ok
+
+  defp always_error(_, _, _), do: :error
+
+  defp random_message do
+    :rand.normal() |> to_string
+  end
 
 end
