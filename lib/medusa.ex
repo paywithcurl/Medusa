@@ -68,10 +68,11 @@ defmodule Medusa do
       true -> Map.put(metadata, :id, UUID.uuid4)
     end
 
-    case is_message_valid?(event, payload, metadata) do
-      true -> Medusa.Broker.publish(event, payload, metadata)
-      false ->
-        Logger.warn "Message failed validation #{event} #{inspect payload} #{inspect metadata}"
+    case validate_message(event, payload, metadata) do
+      :ok ->
+        Medusa.Broker.publish(event, payload, metadata)
+      {:error, reason} ->
+        Logger.warn "Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}"
         {:error, "message is invalid"}
     end
   end
@@ -114,10 +115,14 @@ defmodule Medusa do
     end
   end
 
-  defp is_message_valid?(event, payload, metadata) do
-    case MedusaConfig.get_message_validator(:medusa_config) do
-      nil -> true
-      f -> f.(event, payload, metadata)
+  defp validate_message(event, payload, metadata) do
+    with f when is_function(f) <- MedusaConfig.get_message_validator(:medusa_config),
+         :ok <- f.(event, payload, metadata) do
+      :ok
+    else
+      nil -> :ok
+      {:error, reason} -> {:error, reason}
+      reason -> {:error, reason}
     end
   end
 

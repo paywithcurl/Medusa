@@ -70,7 +70,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       case function.(message) do
         :ok -> ack_message(original_message)
         :error -> retry_event(original_message, state)
-        {:error, reason} -> retry_event(original_message, state)
+        {:error, _} -> retry_event(original_message, state)
         _ -> drop_message(original_message)
       end
     rescue
