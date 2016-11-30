@@ -1,5 +1,5 @@
 defmodule MedusaTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest Medusa
 
   test "not config should fallback to default" do
