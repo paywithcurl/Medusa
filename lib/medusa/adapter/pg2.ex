@@ -29,9 +29,8 @@ defmodule Medusa.Adapter.PG2 do
 
   def handle_call({:new_route, event, function, opts}, _from, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]"
-    {producer, consumer} = Broker.start_producer_consumer(event, function, opts)
-    reply = {:ok, %{producer: producer, consumer: consumer}}
-    {:reply, reply, MapSet.put(state, event)}
+    {_producer, _consumer} = Broker.start_producer_consumer(event, function, opts)
+    {:reply, :ok, MapSet.put(state, event)}
   end
 
   def handle_call({:publish, event, payload}, _from, state) do

@@ -50,9 +50,12 @@ defmodule Medusa do
   end
 
   def consume(route, functions, opts \\ []) do
+    test_fun = fn f ->
+      is_function(f) && :erlang.fun_info(f, :arity) == {:arity, 1}
+    end
     functions
     |> List.wrap
-    |> Enum.all?(&(:erlang.fun_info(&1, :arity)) |> elem(1) == 1)
+    |> Enum.all?(test_fun)
     |> case do
       true ->
         Medusa.Broker.new_route(route, functions, opts)
