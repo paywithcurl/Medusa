@@ -48,8 +48,8 @@ defmodule Medusa.Adapter.PG2Test do
       assert Process.alive?(producer)
       Medusa.publish("local.bind1", "die both")
       assert_receive %Message{body: "die both"}
-      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}
-      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}
+      assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}, 500
+      assert_receive {:DOWN, ^ref_producer, :process, _, :normal}, 500
     end
 
     test "Send event to consumer with bind_once: true in already exists route
@@ -58,22 +58,15 @@ defmodule Medusa.Adapter.PG2Test do
       assert producer_children() == []
       assert Medusa.consume("local.bind2", &MyModule.echo/1)
       assert Medusa.consume("local.bind2", &MyModule.echo/1, bind_once: true)
-      [{_, con1, _, _}, {_, con2, _, _}] = consumer_children()
-      [{_, producer, _, _}] = producer_children()
-      Process.sleep(100)
-      ref_con1 = Process.monitor(con1)
-      ref_con2 = Process.monitor(con2)
-      ref_prod = Process.monitor(producer)
-      assert Process.alive?(con1)
-      assert Process.alive?(con2)
-      assert Process.alive?(producer)
+      assert length(consumer_children()) == 2
+      assert length(producer_children()) == 1
       Process.sleep(100)
       Medusa.publish("local.bind2", "only con2 die")
       assert_receive %Message{body: "only con2 die"}
       assert_receive %Message{body: "only con2 die"}
-      refute_receive {:DOWN, ^ref_con1, :process, _, :normal}
-      assert_receive {:DOWN, ^ref_con2, :process, _, :normal}
-      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}
+      Process.sleep(100)
+      assert length(consumer_children()) == 1
+      assert length(producer_children()) == 1
     end
 
     test "Send event to consumer with bind_once: true and then
@@ -82,21 +75,15 @@ defmodule Medusa.Adapter.PG2Test do
       assert producer_children() == []
       assert Medusa.consume("local.bind3", &MyModule.echo/1, bind_once: true)
       assert Medusa.consume("local.bind3", &MyModule.echo/1)
-      [{_, con1, _, _}, {_, con2, _, _}] = consumer_children()
-      [{_, producer, _, _}] = producer_children()
-      assert Process.alive?(con1)
-      assert Process.alive?(con2)
-      assert Process.alive?(producer)
-      ref_con1 = Process.monitor(con1)
-      ref_con2 = Process.monitor(con2)
-      ref_prod = Process.monitor(producer)
+      assert length(consumer_children()) == 2
+      assert length(producer_children()) == 1
       Process.sleep(100)
       Medusa.publish("local.bind3", "only con1 die")
       assert_receive %Message{body: "only con1 die"}
       assert_receive %Message{body: "only con1 die"}
-      assert_receive {:DOWN, ^ref_con1, :process, _, :normal}
-      refute_receive {:DOWN, ^ref_con2, :process, _, :normal}
-      refute_receive {:DOWN, ^ref_prod, :process, _, :normal}
+      Process.sleep(100)
+      assert length(consumer_children()) == 1
+      assert length(producer_children()) == 1
     end
   end
 
