@@ -3,7 +3,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   @behaviour Medusa.Adapter
   use Connection
   require Logger
-  alias Medusa.Broker.Message
+  alias Medusa.Message
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
 

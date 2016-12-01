@@ -3,7 +3,7 @@ alias Experimental.GenStage
 defmodule Medusa.Consumer.RabbitMQ do
   use GenStage
   require Logger
-  alias Medusa.Broker.Message
+  alias Medusa.Message
 
   def start_link(args) do
     to_link =

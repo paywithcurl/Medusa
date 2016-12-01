@@ -3,7 +3,7 @@ alias Experimental.GenStage
 defmodule Medusa.Producer.RabbitMQ do
   use GenStage
   require Logger
-  alias Medusa.Broker.Message
+  alias Medusa.Message
   alias Medusa.Adapter.RabbitMQ, as: Adapter
 
   defstruct [

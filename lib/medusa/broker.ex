@@ -4,10 +4,6 @@ defmodule Medusa.Broker do
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
 
-  defmodule Message do
-    defstruct topic: "", body: %{}, metadata: %{}
-  end
-
   @doc """
   Start producer and consumer and subscribe
   """

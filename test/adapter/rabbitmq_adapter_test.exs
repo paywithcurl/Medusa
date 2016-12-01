@@ -1,7 +1,7 @@
 defmodule Medusa.Adapter.RabbitMQTest do
   use ExUnit.Case, async: true
   import Medusa.TestHelper
-  alias Medusa.Broker.Message
+  alias Medusa.Message
   alias Medusa.Adapter.RabbitMQ
 
   setup_all do

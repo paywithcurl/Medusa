@@ -2,7 +2,7 @@ defmodule Medusa do
   use Application
   require Logger
   import Supervisor.Spec, warn: false
-  alias Medusa.Broker.Message
+  alias Medusa.Message
 
   @available_adapters [Medusa.Adapter.PG2,
                        Medusa.Adapter.RabbitMQ]

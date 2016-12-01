@@ -2,7 +2,7 @@ defmodule Medusa.Adapter.PG2Test do
   use ExUnit.Case
   require Medusa
   import Medusa.TestHelper
-  alias Medusa.Broker.Message
+  alias Medusa.Message
 
   setup do
     Process.register(self, :self)

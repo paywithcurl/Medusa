@@ -7,8 +7,8 @@ defmodule Medusa.Adapter do
   """
 
   @type event :: String.t
-  @type fun :: (Medusa.Broker.Message.t -> any)
-  @type message :: Medusa.Broker.Message.t
+  @type fun :: (Medusa.Message.t -> any)
+  @type message :: Medusa.Message.t
   @type opts :: Keyword.t
 
   @callback new_route(event, fun, opts) :: {:ok, any} | {:error, any}

@@ -3,7 +3,7 @@ defmodule Medusa.Adapter.PG2 do
   @behaviour Medusa.Adapter
   use GenServer
   require Logger
-  alias Medusa.{Broker, Broker.Message}
+  alias Medusa.{Broker, Message}
 
   def start_link do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
