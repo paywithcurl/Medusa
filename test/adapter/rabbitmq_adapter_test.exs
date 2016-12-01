@@ -118,6 +118,12 @@ defmodule Medusa.Adapter.RabbitMQTest do
       %{body: body} = publish_consume(&MyModule.state/1, %{times: 5, throw: true}, max_retries: 10)
       assert_receive %Message{body: ^body}, 1_000
     end
+
+    @tag :rabbitmq
+    test "exit will retry" do
+      %{body: body} = publish_consume(&MyModule.state/1, %{times: 2, http_error: true}, max_retries: 5)
+      assert_receive %Message{body: ^body}, 1_000
+    end
   end
 
   describe "Drop message when reach max_retries" do

@@ -77,9 +77,13 @@ defmodule Medusa.Consumer.RabbitMQ do
         _ -> drop_message(original_message)
       end
     rescue
-      _ -> retry_event(original_message, state)
+      _ ->
+        retry_event(original_message, state)
     catch
-      _ -> retry_event(original_message, state)
+      _ ->
+        retry_event(original_message, state)
+      _, _ ->
+        retry_event(original_message, state)
     end
   end
 

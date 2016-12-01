@@ -59,6 +59,8 @@ defmodule MyModule do
         raise "Boom!"
       metadata["throw"] ->
         throw "Bamm!"
+      metadata["http_error"] ->
+        :gen_tcp.connect('bogus url', 80, [])
       true ->
         {:error, val}
     end
