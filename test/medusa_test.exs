@@ -51,6 +51,11 @@ defmodule MedusaTest do
   end
 
   describe "Publisher" do
+    setup do
+      MedusaConfig.set_message_validator(:medusa_config, nil)
+      :ok
+    end
+
     test "Don't publish when validator rejects message" do
       validator = fn _, _, _ -> {:error, "failed"} end
       MedusaConfig.set_message_validator(:medusa_config, validator)
@@ -76,7 +81,7 @@ defmodule MedusaTest do
 
     test "Publish leaves id in metadata if present" do
       MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/3)
-      result = Medusa.publish "validator.accepted", %{}, %{:id => 1234, :test => "blah"}
+      result = Medusa.publish "validator.accepted", %{}, %{id: 1234, test: "blah"}
       MedusaConfig.set_message_validator(:medusa_config, nil)
       assert result == :ok
     end
@@ -129,11 +134,11 @@ defmodule MedusaTest do
     end
   end
 
-  defp ensures_id_1234(_, _, %{id: 1234}), do: :ok
+  defp ensures_id_1234(_, _, %{"id" => 1234}), do: :ok
 
   defp ensures_id_1234(_, _, _), do: {:error, "id not matched"}
 
-  defp ensures_id_present(_, _, %{id: _}), do: :ok
+  defp ensures_id_present(_, _, %{"id" => _}), do: :ok
 
   defp always_ok(_, _, _), do: :ok
 

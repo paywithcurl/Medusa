@@ -60,7 +60,15 @@ defmodule Medusa do
   end
 
   def publish(event, payload, metadata \\ %{}, opts \\ []) do
-    metadata = Map.merge(%{id: UUID.uuid4}, metadata)
+    metadata =
+      metadata
+      |> Enum.reduce(%{}, fn{key, val}, acc ->
+        Map.put(acc, to_string(key), val)
+      end)
+    metadata =
+      %{"id" => UUID.uuid4}
+      |> Map.merge(metadata)
+      |> Map.put("event", event)
     opts
     |> Keyword.get(:message_validators, [])
     |> validate_message(event, payload, metadata)
