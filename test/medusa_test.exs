@@ -57,7 +57,7 @@ defmodule MedusaTest do
     end
 
     test "Don't publish when validator rejects message" do
-      validator = fn _, _, _ -> {:error, "failed"} end
+      validator = fn _ -> {:error, "failed"} end
       MedusaConfig.set_message_validator(:medusa_config, validator)
       result = Medusa.publish "validator.rejected", %{}, %{}
       MedusaConfig.set_message_validator(:medusa_config, nil)
@@ -65,7 +65,7 @@ defmodule MedusaTest do
     end
 
     test "Publish when validator accepts message" do
-      validator = fn _, _, _ -> :ok end
+      validator = fn _ -> :ok end
       MedusaConfig.set_message_validator(:medusa_config, validator)
       result = Medusa.publish "validator.accepted", %{}, %{}
       MedusaConfig.set_message_validator(:medusa_config, nil)
@@ -73,73 +73,73 @@ defmodule MedusaTest do
     end
 
     test "Publish adds an id in metadata if not present" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
       result = Medusa.publish "validator.accepted", %{}, %{}
       MedusaConfig.set_message_validator(:medusa_config, nil)
       assert result == :ok
     end
 
     test "Publish leaves id in metadata if present" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/1)
       result = Medusa.publish "validator.accepted", %{}, %{id: 1234, test: "blah"}
       MedusaConfig.set_message_validator(:medusa_config, nil)
       assert result == :ok
     end
 
     test "Publish with 1 extra validator" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
       metadata = %{id: 1234}
-      opts = [message_validators: &ensures_id_1234/3]
+      opts = [message_validators: &ensures_id_1234/1]
       result = Medusa.publish("validator.accepted", %{}, metadata, opts)
       assert result == :ok
     end
 
     test "Publish with only extra validator" do
       metadata = %{id: 1234}
-      opts = [message_validators: &ensures_id_1234/3]
+      opts = [message_validators: &ensures_id_1234/1]
       result = Medusa.publish("validator.accepted", %{}, metadata, opts)
       assert result == :ok
     end
 
     test "Publish with list of extra validators" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
       metadata = %{id: 1234}
-      opts = [message_validators: [&ensures_id_1234/3, &always_ok/3]]
+      opts = [message_validators: [&ensures_id_1234/1, &always_ok/1]]
       result = Medusa.publish("validator.accepted", %{}, metadata, opts)
       assert result == :ok
     end
 
     test "Publish with error extra validator in the middle" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
       metadata = %{}
-      opts = [message_validators: [&ensures_id_1234/3, &always_ok/3]]
+      opts = [message_validators: [&ensures_id_1234/1, &always_ok/1]]
       result = Medusa.publish("validator.accepted", %{}, metadata, opts)
       assert result == {:error, "message is invalid"}
     end
 
     test "Publish with error extra validator in the end" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
       metadata = %{}
-      opts = [message_validators: [&always_ok/3, &ensures_id_1234/3]]
+      opts = [message_validators: [&always_ok/1, &ensures_id_1234/1]]
       result = Medusa.publish("validator.accepted", %{}, metadata, opts)
       assert result == {:error, "message is invalid"}
     end
 
     test "Publish with error extra validator in the global" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/3)
+      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/1)
       metadata = %{}
-      opts = [message_validators: [&always_ok/3, &ensures_id_present/3]]
+      opts = [message_validators: [&always_ok/1, &ensures_id_present/1]]
       result = Medusa.publish("validator.accepted", %{}, metadata, opts)
       assert result == {:error, "message is invalid"}
     end
   end
 
-  defp ensures_id_1234(_, _, %{"id" => 1234}), do: :ok
+  defp ensures_id_1234(%{metadata: %{"id" => 1234}}), do: :ok
 
-  defp ensures_id_1234(_, _, _), do: {:error, "id not matched"}
+  defp ensures_id_1234(_), do: {:error, "id not matched"}
 
-  defp ensures_id_present(_, _, %{"id" => _}), do: :ok
+  defp ensures_id_present(%{metadata: %{"id" => _}}), do: :ok
 
-  defp always_ok(_, _, _), do: :ok
+  defp always_ok(_), do: :ok
 
 end

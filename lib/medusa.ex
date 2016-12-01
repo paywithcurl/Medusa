@@ -2,6 +2,7 @@ defmodule Medusa do
   use Application
   require Logger
   import Supervisor.Spec, warn: false
+  alias Medusa.Broker.Message
 
   @available_adapters [Medusa.Adapter.PG2,
                        Medusa.Adapter.RabbitMQ]
@@ -49,32 +50,36 @@ defmodule Medusa do
     {:ok, supervisor}
   end
 
+  @doc """
+  Adds a new route using the configured adapter.
+  """
   def consume(route, functions, opts \\ []) do
     case validate_consume_function(functions) do
       :ok ->
-        Medusa.Broker.new_route(route, functions, opts)
+        adapter().new_route(route, functions, opts)
       {:error, reason} ->
         Logger.warn("#{inspect reason}")
         {:error, reason}
     end
   end
 
+  @doc """
+  Sends to the matching routes the event, using the configured adapter.
+  metadata keys will always convert to string
+  """
   def publish(event, payload, metadata \\ %{}, opts \\ []) do
     metadata =
       metadata
-      |> Enum.reduce(%{}, fn{key, val}, acc ->
-        Map.put(acc, to_string(key), val)
-      end)
-    metadata =
-      %{"id" => UUID.uuid4}
-      |> Map.merge(metadata)
+      |> map_key_to_string
+      |> Map.merge(%{"id" => UUID.uuid4}, fn _k, v1, _v2 -> v1 end)
       |> Map.put("event", event)
+    message = %Message{topic: event, body: payload, metadata: metadata}
     opts
     |> Keyword.get(:message_validators, [])
-    |> validate_message(event, payload, metadata)
+    |> validate_message(message)
     |> case do
       :ok ->
-        Medusa.Broker.publish(event, payload, metadata)
+        adapter().publish(message)
       {:error, reason} ->
         Logger.warn "Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}"
         {:error, "message is invalid"}
@@ -97,14 +102,14 @@ defmodule Medusa do
       config :medusa, Medusa,
         validate_message: &function/3
   """
-  def validate_message(functions, event, payload, metadata) do
+  def validate_message(functions, %Message{} = message) do
     global_validator = MedusaConfig.get_message_validator(:medusa_config)
     functions =
       cond do
         is_function(global_validator) -> [global_validator|List.wrap(functions)]
         true -> List.wrap(functions)
       end
-    do_validate_message(functions, event, payload, metadata)
+    do_validate_message(functions, message)
   end
 
   defp child_adapter do
@@ -158,21 +163,27 @@ defmodule Medusa do
     {:error, "consume must be function"}
   end
 
-  defp do_validate_message([], _, _, _) do
+  defp do_validate_message([], _message) do
     :ok
   end
 
-  defp do_validate_message([function|tail], event, payload, metadata)
+  defp do_validate_message([function|tail], %Message{} = message)
   when is_function(function) do
-    case apply(function, [event, payload, metadata]) do
-      :ok -> do_validate_message(tail, event, payload, metadata)
+    case apply(function, [message]) do
+      :ok -> do_validate_message(tail, message)
       {:error, reason} -> {:error, reason}
       reason -> {:error, reason}
     end
   end
 
-  defp do_validate_message(_, _, _, _) do
+  defp do_validate_message(_, _) do
     {:error, "validator is not a function"}
   end
 
+  defp map_key_to_string(%{} = map) do
+    map
+    |> Enum.reduce(%{}, fn{key, val}, acc ->
+      Map.put(acc, to_string(key), val)
+    end)
+  end
 end

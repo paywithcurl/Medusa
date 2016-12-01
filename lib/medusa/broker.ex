@@ -9,23 +9,6 @@ defmodule Medusa.Broker do
   end
 
   @doc """
-  Adds a new route to the broker. If there is an existing route,
-  it just ignores it.
-  """
-  def new_route(event, function, opts) do
-    Medusa.adapter.new_route(event, function, opts)
-  end
-
-  @doc """
-  Sends to the matching routes the event, using the configured adapter.
-  metadata keys will always convert to string
-  """
-  def publish(event, payload, metadata \\ %{}) do
-    message = %Message{topic: event, body: payload, metadata: metadata}
-    Medusa.adapter.publish(message)
-  end
-
-  @doc """
   Start producer and consumer and subscribe
   """
   def start_producer_consumer(event, function, opts) do

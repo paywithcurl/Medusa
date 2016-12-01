@@ -53,9 +53,7 @@ defmodule Medusa.Consumer.RabbitMQ do
            tag when is_number(tag) <- metadata["delivery_tag"],
            validators <- Keyword.get(opts, :message_validators, []),
            :ok <- Medusa.validate_message(validators,
-                                          metadata["event"],
-                                          event.body,
-                                          metadata) do
+                                          event) do
         do_event(event, f, event, state)
       else
         {:error, reason} ->
