@@ -181,9 +181,12 @@ defmodule Medusa do
   end
 
   defp map_key_to_string(%{} = map) do
-    map
-    |> Enum.reduce(%{}, fn{key, val}, acc ->
-      Map.put(acc, to_string(key), val)
+    Enum.reduce(map, %{}, fn
+      {key, %{} = val}, acc ->
+        Map.put(acc, to_string(key), map_key_to_string(val))
+      {key, val}, acc ->
+        Map.put(acc, to_string(key), val)
     end)
   end
+
 end
