@@ -3,7 +3,7 @@ alias Experimental.GenStage
 defmodule Medusa.Producer.RabbitMQ do
   use GenStage
   require Logger
-  alias Medusa.Broker.Message
+  alias Medusa.Message
   alias Medusa.Adapter.RabbitMQ, as: Adapter
 
   defstruct [
@@ -65,7 +65,9 @@ defmodule Medusa.Producer.RabbitMQ do
   def handle_info({:basic_deliver, payload, %{delivery_tag: tag}}, state) do
     case Poison.decode(payload) do
       {:ok, msg} ->
-        message = %Message{body: msg["body"], metadata: msg["metadata"]}
+        message = %Message{topic: msg["topic"],
+                           body: msg["body"],
+                           metadata: msg["metadata"]}
         info = %{"channel" => state.channel, "delivery_tag" => tag}
         message = Map.update(message,
                              :metadata,

@@ -4,27 +4,6 @@ defmodule Medusa.Broker do
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
 
-  defmodule Message do
-    defstruct body: %{}, metadata: %{}
-  end
-
-  @doc """
-  Adds a new route to the broker. If there is an existing route,
-  it just ignores it.
-  """
-  def new_route(event, function, opts) do
-    Medusa.adapter.new_route(event, function, opts)
-  end
-
-  @doc """
-  Sends to the matching routes the event, using the configured adapter.
-  """
-  def publish(event, payload, metadata \\ %{}) do
-    metadata = Map.put(metadata, :event, event)
-    message = %Message{body: payload, metadata: metadata}
-    Medusa.adapter.publish(event, message)
-  end
-
   @doc """
   Start producer and consumer and subscribe
   """

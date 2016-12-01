@@ -3,6 +3,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   @behaviour Medusa.Adapter
   use Connection
   require Logger
+  alias Medusa.Message
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
 
@@ -22,12 +23,12 @@ defmodule Medusa.Adapter.RabbitMQ do
     Connection.call(__MODULE__, :rabbitmq_exchange)
   end
 
-  def new_route(event, function, opts) do
-    Connection.call(__MODULE__, {:new_route, event, function, opts})
+  def new_route(topic, function, opts) do
+    Connection.call(__MODULE__, {:new_route, topic, function, opts})
   end
 
-  def publish(event, message) do
-    Connection.call(__MODULE__, {:publish, event, message})
+  def publish(%Message{} = message) do
+    Connection.call(__MODULE__, {:publish, message})
   end
 
   def init([]) do
@@ -58,14 +59,14 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:reply, @exchange_name, state}
   end
 
-  def handle_call({:new_route, event, function, opts}, _from, state) do
-    Logger.debug("#{__MODULE__}: new route #{inspect event}")
+  def handle_call({:new_route, topic, function, opts}, _from, state) do
+    Logger.debug("#{__MODULE__}: new route #{inspect topic}")
     queue_name =
       opts
       |> Keyword.get(:queue_name)
-      |> queue_name(event, function)
+      |> queue_name(topic, function)
     opts = Keyword.put(opts, :queue_name, queue_name)
-    with {:ok, p} <- Producer.start_child(event, opts),
+    with {:ok, p} <- Producer.start_child(topic, opts),
          {:ok, _} <- Consumer.start_child(function, p, opts) do
       {:reply, :ok, state}
     else
@@ -77,14 +78,15 @@ defmodule Medusa.Adapter.RabbitMQ do
     end
   end
 
-  def handle_call({:publish, event, payload}, _from, state) do
-    Logger.debug("#{__MODULE__}: publish #{inspect event}: #{inspect payload}")
-    case Poison.encode(payload) do
+  def handle_call({:publish, %Message{} = message}, _from, state) do
+    topic = message.topic
+    Logger.debug("#{__MODULE__}: publish #{inspect message}")
+    case Poison.encode(message) do
       {:ok, message} ->
-        {reply, new_state} = do_publish(event, message, 0, state)
+        {reply, new_state} = do_publish(topic, message, 0, state)
         {:reply, reply, new_state}
       {:error, reason} ->
-        Logger.warn("#{__MODULE__}: publish malformed message #{inspect payload}")
+        Logger.warn("#{__MODULE__}: publish malformed message #{inspect message}")
         {:reply, {:error, reason}, state}
     end
   end
@@ -98,14 +100,14 @@ defmodule Medusa.Adapter.RabbitMQ do
     range = Range.new(0, :queue.len(messages))
     new_state = Enum.reduce(range, state, fn (_, acc) ->
       case :queue.out(acc.messages) do
-        {{:value, {event, message, times}}, new_messages}
+        {{:value, {topic, message, times}}, new_messages}
         when times < retry_publish_max ->
           acc = %{acc | messages: new_messages}
-          {_, acc} = do_publish(event, message, times, acc)
+          {_, acc} = do_publish(topic, message, times, acc)
           acc
 
-        {{:value, {event, message, _}}, new_messages} ->
-          Logger.warn("#{__MODULE__} republish failed for #{inspect {event, message}}")
+        {{:value, {topic, message, _}}, new_messages} ->
+          Logger.warn("#{__MODULE__} republish failed for #{inspect {topic, message}}")
           %{acc | messages: new_messages}
 
         {:empty, new_messages} ->
@@ -199,25 +201,25 @@ defmodule Medusa.Adapter.RabbitMQ do
     {group, topic, function} |> :erlang.phash2
   end
 
-  defp do_publish(event, message, times,
+  defp do_publish(topic, message, times,
   %{channel: chan, messages: messages} = state) when not is_nil(chan) do
     try do
       AMQP.Basic.publish(chan,
                          @exchange_name,
-                         event,
+                         topic,
                          message,
                          persistent: true)
       {:ok, state}
     rescue
       _ ->
-        new_messages = :queue.in({event, message, times + 1}, messages)
+        new_messages = :queue.in({topic, message, times + 1}, messages)
         {:error, %{state | messages: new_messages}}
     end
   end
 
-  defp do_publish(event, message, times, %{messages: messages} = state) do
-    new_messages = :queue.in({event, message, times}, messages)
-    {:error, %{state | messages: new_messages}}
+  defp do_publish(topic, message, times, %{messages: messages} = state) do
+    new_messages = :queue.in({topic, message, times}, messages)
+    {{:error, "cannot connect rabbitmq"}, %{state | messages: new_messages}}
   end
 
   defp random_name(len \\ 8) do

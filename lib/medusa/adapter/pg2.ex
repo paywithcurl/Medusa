@@ -3,7 +3,7 @@ defmodule Medusa.Adapter.PG2 do
   @behaviour Medusa.Adapter
   use GenServer
   require Logger
-  alias Medusa.Broker
+  alias Medusa.{Broker, Message}
 
   def start_link do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
@@ -13,8 +13,8 @@ defmodule Medusa.Adapter.PG2 do
     GenServer.call(__MODULE__, {:new_route, event, function, opts})
   end
 
-  def publish(event, message) do
-    broadcast(get_members, {:publish, event, message})
+  def publish(%Message{} = message) do
+    broadcast(get_members, {:publish, message})
   end
 
   @doc """
@@ -29,14 +29,13 @@ defmodule Medusa.Adapter.PG2 do
 
   def handle_call({:new_route, event, function, opts}, _from, state) do
     Logger.debug "#{inspect __MODULE__}: [#{inspect event}]"
-    {producer, consumer} = Broker.start_producer_consumer(event, function, opts)
-    reply = {:ok, %{producer: producer, consumer: consumer}}
-    {:reply, reply, MapSet.put(state, event)}
+    {_producer, _consumer} = Broker.start_producer_consumer(event, function, opts)
+    {:reply, :ok, MapSet.put(state, event)}
   end
 
-  def handle_call({:publish, event, payload}, _from, state) do
-    Logger.debug "#{inspect __MODULE__}: [#{inspect event}]: #{inspect payload}"
-    Enum.each(state, &Broker.maybe_route({&1, event, payload}))
+  def handle_call({:publish, %Message{} = message}, _from, state) do
+    Logger.debug("#{inspect __MODULE__}: #{inspect message}")
+    Enum.each(state, &Broker.maybe_route({&1, message.topic, message}))
     {:reply, :ok, state}
   end
 

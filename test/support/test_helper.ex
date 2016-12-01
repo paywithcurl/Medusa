@@ -30,7 +30,7 @@ defmodule Medusa.TestHelper do
 end
 
 defmodule MyModule do
-  alias Medusa.Broker.Message
+  alias Medusa.Message
 
   def echo(message) do
     :self |> Process.whereis |> send(message)
