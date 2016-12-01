@@ -5,7 +5,7 @@ defmodule Medusa.Broker do
   alias Medusa.ConsumerSupervisor, as: Consumer
 
   defmodule Message do
-    defstruct body: %{}, metadata: %{}
+    defstruct topic: "", body: %{}, metadata: %{}
   end
 
   @doc """
@@ -21,8 +21,8 @@ defmodule Medusa.Broker do
   metadata keys will always convert to string
   """
   def publish(event, payload, metadata \\ %{}) do
-    message = %Message{body: payload, metadata: metadata}
-    Medusa.adapter.publish(event, message)
+    message = %Message{topic: event, body: payload, metadata: metadata}
+    Medusa.adapter.publish(message)
   end
 
   @doc """

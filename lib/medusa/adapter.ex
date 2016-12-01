@@ -12,6 +12,6 @@ defmodule Medusa.Adapter do
   @type opts :: Keyword.t
 
   @callback new_route(event, fun, opts) :: {:ok, any} | {:error, any}
-  @callback publish(event, message) :: :ok | :error
+  @callback publish(message) :: :ok | :error
 
 end
