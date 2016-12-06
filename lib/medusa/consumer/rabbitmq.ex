@@ -87,16 +87,17 @@ defmodule Medusa.Consumer.RabbitMQ do
     end
   end
 
-  defp do_event(%Message{} = message, [function|tail], orig_message, state) do
+  defp do_event(%Message{} = message, [function|tail], original_message, state) do
     try do
       case function.(message) do
-        new = %Message{} -> do_event(new, tail, orig_message, state)
-        _ -> drop_or_requeue_message(orig_message, state)
+        new = %Message{} -> do_event(new, tail, original_message, state)
+        _ -> drop_or_requeue_message(original_message, state)
       end
     rescue
-      _ -> drop_or_requeue_message(orig_message, state)
+      _ -> drop_or_requeue_message(original_message, state)
     catch
-      _ -> drop_or_requeue_message(orig_message, state)
+      _ -> drop_or_requeue_message(original_message, state)
+      _, _ -> drop_or_requeue_message(original_message, state)
     end
   end
 
