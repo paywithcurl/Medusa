@@ -72,17 +72,26 @@ defmodule Medusa.Consumer.RabbitMQ do
     try do
       case function.(message) do
         :ok -> ack_message(original_message)
-        :error -> retry_event(original_message, state)
-        {:error, _} -> retry_event(original_message, state)
-        _ -> drop_message(original_message)
+        :error ->
+          Logger.error("Error processing message #{inspect function}")
+          retry_event(original_message, state)
+        {:error, reason} ->
+          Logger.error("Error processing message #{inspect function} #{inspect reason}")
+          retry_event(original_message, state)
+        error ->
+          Logger.error("Error processing message #{inspect function} #{inspect error}")
+          drop_message(original_message)
       end
     rescue
-      _ ->
+      error ->
+        Logger.error("Error processing message #{inspect function} #{inspect error}")
         retry_event(original_message, state)
     catch
-      _ ->
+      error ->
+        Logger.error("Error processing message #{inspect function} #{inspect error}")
         retry_event(original_message, state)
-      _, _ ->
+      error, other_error ->
+        Logger.error("Error processing message #{inspect function} #{inspect error} #{inspect other_error}")
         retry_event(original_message, state)
     end
   end
@@ -91,13 +100,21 @@ defmodule Medusa.Consumer.RabbitMQ do
     try do
       case function.(message) do
         new = %Message{} -> do_event(new, tail, original_message, state)
-        _ -> drop_or_requeue_message(original_message, state)
+        error ->
+          Logger.error("Error processing message #{inspect function} #{inspect error}")
+          drop_or_requeue_message(original_message, state)
       end
     rescue
-      _ -> drop_or_requeue_message(original_message, state)
+      error ->
+        Logger.error("Error processing message #{inspect function} #{inspect error}")
+        drop_or_requeue_message(original_message, state)
     catch
-      _ -> drop_or_requeue_message(original_message, state)
-      _, _ -> drop_or_requeue_message(original_message, state)
+      error ->
+        Logger.error("Error processing message #{inspect function} #{inspect error}")
+        drop_or_requeue_message(original_message, state)
+      error, other_error ->
+        Logger.error("Error processing message #{inspect function} #{inspect error} #{inspect other_error}")
+        drop_or_requeue_message(original_message, state)
     end
   end
 
