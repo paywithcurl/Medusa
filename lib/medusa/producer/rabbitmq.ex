@@ -88,6 +88,11 @@ defmodule Medusa.Producer.RabbitMQ do
     |> get_next_event
   end
 
+  def handle_info(msg, state) do
+    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self}")
+    {:noreply, state}
+  end
+
   def terminate(reason, state) do
     ensure_channel_closed(state.channel)
     Logger.error("""
