@@ -34,6 +34,11 @@ defmodule Medusa.Consumer.RabbitMQ do
     {:noreply, [], state}
   end
 
+  def handle_info(msg, state) do
+    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self}")
+    {:noreply, state}
+  end
+
   def terminate(reason, state) do
     Logger.error("""
       #{__MODULE__}
