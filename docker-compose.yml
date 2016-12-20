@@ -1,0 +1,24 @@
+version: '2'
+services:
+
+  rabbitmq:
+    image: "rabbitmq:3.6.5-management"
+    hostname: "rabbit1"
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=THECOOKIE
+      - RABBITMQ_DEFAULT_USER=rabbitmq
+      - RABBITMQ_DEFAULT_PASS=rabbitmq
+      - RABBITMQ_DEFAULT_VHOST=/
+
+  medusa:
+    image: "elixir:1.3"
+    links:
+      - rabbitmq
+    volumes:
+      - ./:/usr/src/app
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USERNAME=rabbitmq
+      - RABBITMQ_PASSWORD=rabbitmq
+      - GROUP=medusa
+    command: "bash -c 'cd /usr/src/app && ls && ./run_tests_docker.sh'"
