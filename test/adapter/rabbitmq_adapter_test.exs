@@ -5,8 +5,8 @@ defmodule Medusa.Adapter.RabbitMQTest do
   alias Medusa.Adapter.RabbitMQ
 
   setup_all do
-    put_adapter_config(Medusa.Adapter.RabbitMQ)
-    {:ok, conn} = AMQP.Connection.open()
+    opts = put_rabbitmq_adapter_config()[:RabbitMQ][:connection]
+    {:ok, conn} = AMQP.Connection.open(opts)
     {:ok, chan} = AMQP.Channel.open(conn)
     {:ok, _} = Agent.start(fn -> MapSet.new() end, name: :queues)
     on_exit fn ->
