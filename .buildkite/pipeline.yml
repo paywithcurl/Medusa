@@ -1,0 +1,9 @@
+env:
+  REPO_NAME: "medusa"
+
+steps:
+  - name: ":elixir: Tests"
+    command: ".buildkite/run_tests.sh"
+  - wait
+  - name: ":docker: Cleanup"
+    command: ".buildkite/cleanup.sh"
