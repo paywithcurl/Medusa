@@ -31,6 +31,10 @@ defmodule Medusa.Adapter.RabbitMQ do
     Connection.call(__MODULE__, {:publish, message})
   end
 
+  def alive? do
+    Connection.call(__MODULE__, {:alive})
+  end
+
   def init([]) do
     timeout = Medusa.config |> Keyword.get(:retry_publish_backoff, 5_000)
     :timer.send_interval(timeout, self, :republish)
@@ -88,6 +92,32 @@ defmodule Medusa.Adapter.RabbitMQ do
       {:error, reason} ->
         Logger.warn("#{__MODULE__}: publish malformed message #{inspect message}")
         {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:alive}, _from, state) do
+    # Default rabbitmq vhost
+    default_vhost = "/"
+
+    # The vhost needs to be url encoded in the path as it can contain /
+    # and it needs to be separated from the path itself.
+    # The default path is /
+    # See https://lists.rabbitmq.com/pipermail/rabbitmq-discuss/2012-March/019161.html
+    vhost = URI.encode_www_form(default_vhost)
+
+    opts = connection_opts
+    url = "http://#{opts[:username]}:#{opts[:password]}@#{opts[:host]}:15672/api/aliveness-test/#{vhost}"
+
+    try do
+      alive = case HTTPoison.get(url, %{}, [timeout: 1_000]) do
+		{:ok, %{status_code: 200, body: "{\"status\":\"ok\"}"}} -> true
+		_ -> false
+	      end
+      {:reply, alive, state}
+    rescue
+      _ -> {:reply, false, state}
+    catch
+      _, _ -> {:reply, false, state}
     end
   end
 

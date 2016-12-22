@@ -80,6 +80,29 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert length(consumer_children()) == 1
       assert length(producer_children()) == 1
     end
+
+    test "Test connectivity with alive?" do
+      assert Medusa.alive?
+    end
+
+    test "Test connectivity to host timing out with alive?" do
+      config = Application.get_env(:medusa, Medusa)
+
+      # TEST-NET ip from RFC 5737, shouldn't be routable
+      Application.put_env(:medusa, Medusa, invalid_config "192.0.2.0")
+      assert not Medusa.alive?
+      Application.put_env(:medusa, Medusa, config)
+    end
+
+    test "Test connectivity to invalid host with alive?" do
+      config = Application.get_env(:medusa, Medusa)
+
+      # Invalid TLD from RFC 2606
+      Application.put_env(:medusa, Medusa, invalid_config "rabbitmq.invalid")
+      assert not Medusa.alive?
+      Application.put_env(:medusa, Medusa, config)
+    end
+
   end
 
   describe "RabbitMQ re-publish" do
@@ -337,6 +360,19 @@ defmodule Medusa.Adapter.RabbitMQTest do
     Process.sleep(1_000)
     Medusa.publish(topic, body, Map.merge(metadata, %{agent: agent_name}))
     %{agent: agent_name, body: body}
+  end
+
+  defp invalid_config(host) do
+    [
+      adapter: Medusa.Adapter.RabbitMQ,
+      RabbitMQ: %{
+	connection: [
+	  host: host,
+	  username: "donald",
+	  password: "boss",
+	  ]
+      }
+    ]
   end
 
 end
