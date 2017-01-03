@@ -34,13 +34,22 @@ defmodule Medusa.TestHelper do
     Supervisor.which_children(Medusa.ProducerSupervisor)
   end
 
+  def pid_to_list(pid) when is_pid(pid) do
+    :erlang.pid_to_list(pid)
+  end
+
+  def list_to_pid(list) when is_list(list) do
+    :erlang.list_to_pid(list)
+  end
+
 end
 
 defmodule MyModule do
   alias Medusa.Message
+  import Medusa.TestHelper
 
   def echo(message) do
-    :self |> Process.whereis |> send(message)
+    message.metadata["from"] |> send_message_back(message)
     :ok
   end
 
@@ -52,7 +61,9 @@ defmodule MyModule do
     %{message | body: String.reverse(body)}
   end
 
-  def state(%{metadata: %{"agent" => agent, "times" => times} = metadata} = message) do
+  def state(%{metadata: %{"agent" => agent,
+                          "times" => times,
+                          "from" => from} = metadata} = message) do
     val = agent |> String.to_atom |> Agent.get_and_update(&({&1, &1+1}))
     cond do
       metadata["bad_return"] ->
@@ -60,7 +71,7 @@ defmodule MyModule do
       val == times && metadata["middleware"] ->
         message
       val == times ->
-        :self |> Process.whereis |> send(message)
+        send_message_back(from, message)
         :ok
       metadata["raise"] ->
         raise "Boom!"
@@ -71,5 +82,10 @@ defmodule MyModule do
       true ->
         {:error, val}
     end
+  end
+
+  defp send_message_back(list, message) when is_list(list) do
+    pid = list_to_pid(list)
+    if Process.alive?(pid), do: send(pid, message)
   end
 end

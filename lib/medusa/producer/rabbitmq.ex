@@ -10,6 +10,7 @@ defmodule Medusa.Producer.RabbitMQ do
     demand: 0,
     channel: nil,
     consumer_tag: nil,
+    consumers: MapSet.new(),
     topic: nil,
     queue_name: nil
   ]
@@ -33,13 +34,18 @@ defmodule Medusa.Producer.RabbitMQ do
     get_next_event(%{state | demand: demand})
   end
 
-  def handle_subscribe(:consumer, _opts, _from, state) do
-    {:automatic, state}
+  def handle_subscribe(:consumer, _opts, from, %{consumers: consumers} = state) do
+    new_consumers = MapSet.put(consumers, from)
+    {:automatic, %{state | consumers: new_consumers}}
   end
 
-  def handle_cancel({:down, :normal}, _from, state) do
+  def handle_cancel({:down, :normal}, from, %{consumers: consumers} = state) do
     Logger.debug("#{__MODULE__} handle_cancel: normal")
-    {:stop, :normal, state}
+    new_consumers = MapSet.delete(consumers, from)
+    case MapSet.size(new_consumers) do
+      0 -> {:stop, :normal, state}
+      _ -> {:noreply, [], %{state | consumers: new_consumers}}
+    end
   end
 
   def handle_cancel(reason, _from, state) do

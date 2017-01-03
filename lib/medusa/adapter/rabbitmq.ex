@@ -15,18 +15,31 @@ defmodule Medusa.Adapter.RabbitMQ do
     Connection.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  @doc """
+  Get current rabbitmq connction
+  """
   def connection do
     Connection.call(__MODULE__, :rabbitmq_connection)
   end
 
+  @doc """
+  Get current rabbitmq exchange name
+  """
   def exchange do
     Connection.call(__MODULE__, :rabbitmq_exchange)
   end
 
+  @doc """
+  Create a new Producer/Consumer and listen to given topic
+  Producer will only create once for queue_name in `opts`
+  """
   def new_route(topic, function, opts) do
     Connection.call(__MODULE__, {:new_route, topic, function, opts})
   end
 
+  @doc """
+  Publish message
+  """
   def publish(%Message{} = message) do
     Connection.call(__MODULE__, {:publish, message})
   end
@@ -62,17 +75,14 @@ defmodule Medusa.Adapter.RabbitMQ do
   def handle_call({:new_route, topic, function, opts}, _from, state) do
     Logger.debug("#{__MODULE__}: new route #{inspect topic}")
     queue_name =
-      opts
-      |> Keyword.get(:queue_name)
-      |> queue_name(topic, function)
-    opts = Keyword.put(opts, :queue_name, queue_name)
-    with {:ok, p} <- Producer.start_child(topic, opts),
-         {:ok, _} <- Consumer.start_child(function, p, opts) do
+      opts |> Keyword.get(:queue_name) |> queue_name(topic, function)
+    new_opts = Keyword.put(opts, :queue_name, queue_name)
+
+    with {:ok, p} <- start_producer(topic, new_opts),
+         {:ok, _} <- Consumer.start_child(function, p, new_opts) do
       {:reply, :ok, state}
     else
-      {:error, {:already_started, _}} ->
-        {:reply, :ok, state}
-      error ->
+      {:error, error} ->
         Logger.error("#{__MODULE__} new_route: #{inspect error}")
         {:reply, {:error, error}, state}
     end
@@ -227,6 +237,14 @@ defmodule Medusa.Adapter.RabbitMQ do
     |> :crypto.strong_rand_bytes
     |> Base.url_encode64
     |> binary_part(0, len)
+  end
+
+  defp start_producer(topic, opts) do
+    case Producer.start_child(topic, opts) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, error} -> {:error, error}
+    end
   end
 
 end
