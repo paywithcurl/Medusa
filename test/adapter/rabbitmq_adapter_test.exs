@@ -366,11 +366,16 @@ defmodule Medusa.Adapter.RabbitMQTest do
     [
       adapter: Medusa.Adapter.RabbitMQ,
       RabbitMQ: %{
+	admin: [
+	  protocol: "http",
+	  port: 15672,
+	],
 	connection: [
 	  host: host,
 	  username: "donald",
 	  password: "boss",
-	  ]
+	  virtual_host: "/"
+	]
       }
     ]
   end

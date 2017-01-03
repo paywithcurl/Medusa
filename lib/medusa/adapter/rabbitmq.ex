@@ -96,17 +96,13 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_call({:alive}, _from, state) do
-    # Default rabbitmq vhost
-    default_vhost = "/"
-
     # The vhost needs to be url encoded in the path as it can contain /
     # and it needs to be separated from the path itself.
     # The default path is /
     # See https://lists.rabbitmq.com/pipermail/rabbitmq-discuss/2012-March/019161.html
-    vhost = URI.encode_www_form(default_vhost)
+    vhost = URI.encode_www_form(connection_opts[:virtual_host])
 
-    opts = connection_opts
-    url = "http://#{opts[:username]}:#{opts[:password]}@#{opts[:host]}:15672/api/aliveness-test/#{vhost}"
+    url = "#{admin_opts[:protocol]}://#{connection_opts[:username]}:#{connection_opts[:password]}@#{connection_opts[:host]}:#{admin_opts[:port]}/api/aliveness-test/#{vhost}"
 
     try do
       alive = case HTTPoison.get(url, %{}, [timeout: 1_000]) do
@@ -209,11 +205,14 @@ defmodule Medusa.Adapter.RabbitMQ do
     :ok
   end
 
+  defp admin_opts do
+    Medusa.config
+    |> get_in([:RabbitMQ, :admin])
+  end
+
   defp connection_opts do
     Medusa.config
     |> get_in([:RabbitMQ, :connection])
-    |> Kernel.||([])
-    |> Keyword.put_new(:heartbeat, 10)
   end
 
   defp group_name, do: Medusa.config |> Keyword.get(:group)
