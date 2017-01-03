@@ -123,7 +123,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
 
-  describe "Retry on failrue within max_retries" do
+  describe "Retry on failure within max_retries" do
     @tag :rabbitmq
     test "{:error, reason} will retry" do
       %{body: body} = publish_consume(&MyModule.state/1, %{times: 1}, max_retries: 1)
@@ -184,7 +184,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
   end
 
-  describe "Multi functions in consume wrong failrue in the middle" do
+  describe "Multi functions in consume wrong failure in the middle" do
     @tag :rabbitmq
     test "not return %Message{} with drop_on_failure should drop immediately" do
       %{body: _} = publish_consume([&MyModule.error/1, &MyModule.echo/1], %{}, drop_on_failure: true)
