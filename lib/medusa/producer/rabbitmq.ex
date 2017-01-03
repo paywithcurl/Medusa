@@ -48,9 +48,10 @@ defmodule Medusa.Producer.RabbitMQ do
     end
   end
 
-  def handle_cancel(reason, _from, state) do
+  def handle_cancel(reason, from, %{consumers: consumers} = state) do
     Logger.debug("#{__MODULE__} handle_cancel: #{inspect reason}")
-    {:noreply, [], state}
+    new_consumers = MapSet.delete(consumers, from)
+    {:noreply, [], %{state | consumers: new_consumers}}
   end
 
   def handle_info({:basic_consume_ok, meta}, state) do
