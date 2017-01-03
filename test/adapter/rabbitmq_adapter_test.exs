@@ -13,6 +13,8 @@ defmodule Medusa.Adapter.RabbitMQTest do
     on_exit fn ->
       :queues
       |> Agent.get(&(&1))
+      |> MapSet.union(MapSet.new(["foo1", "foo2", "foo3", "bind1", "bind2",
+                                  "republish", "multi_consumer"]))
       |> Enum.each(&AMQP.Queue.delete(chan, "test-rabbitmq.#{&1}"))
     end
 
@@ -77,6 +79,20 @@ defmodule Medusa.Adapter.RabbitMQTest do
       Process.sleep(100)
       consumers = :sys.get_state(producer).consumers
       assert Map.keys(consumers) |> length == 1
+    end
+
+    @tag :rabbitmq
+    test "consume with multiple consumers" do
+      consume("rabbit.multi_consumer", &MyModule.echo/1, queue_name: "multi_consumer", consumers: 10)
+      Process.sleep(1_000)
+      producer = Process.whereis(:"test-rabbitmq.multi_consumer")
+      consumers = :sys.get_state(producer).consumers
+      assert Map.keys(consumers) |> length == 10
+      consume("rabbit.multi_consumer", &MyModule.echo/1, queue_name: "multi_consumer", consumers: 5)
+      Process.sleep(1_000)
+      producer = Process.whereis(:"test-rabbitmq.multi_consumer")
+      consumers = :sys.get_state(producer).consumers
+      assert Map.keys(consumers) |> length == 15
     end
   end
 

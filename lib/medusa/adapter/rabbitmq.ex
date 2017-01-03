@@ -74,12 +74,14 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def handle_call({:new_route, topic, function, opts}, _from, state) do
     Logger.debug("#{__MODULE__}: new route #{inspect topic}")
+
     queue_name =
       opts |> Keyword.get(:queue_name) |> queue_name(topic, function)
+    consumers = Keyword.get(opts, :consumers, 1)
     new_opts = Keyword.put(opts, :queue_name, queue_name)
 
     with {:ok, p} <- start_producer(topic, new_opts),
-         {:ok, _} <- Consumer.start_child(function, p, new_opts) do
+         {:ok, _} <- start_consumer(function, p, new_opts, consumers) do
       {:reply, :ok, state}
     else
       {:error, error} ->
@@ -244,6 +246,16 @@ defmodule Medusa.Adapter.RabbitMQ do
       {:ok, pid} -> {:ok, pid}
       {:error, {:already_started, pid}} -> {:ok, pid}
       {:error, error} -> {:error, error}
+    end
+  end
+
+  defp start_consumer(function, producer, opts, times) do
+    range = Range.new(1, times)
+    Enum.map(range, fn _ -> Consumer.start_child(function, producer, opts) end)
+    |> Enum.all?(&elem(&1, 0) == :ok)
+    |> case do
+      true -> {:ok, times}
+      false -> {:error, producer}
     end
   end
 
