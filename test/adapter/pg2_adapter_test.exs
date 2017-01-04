@@ -1,13 +1,8 @@
 defmodule Medusa.Adapter.PG2Test do
   use ExUnit.Case
-  require Medusa
+  import Medusa
   import Medusa.TestHelper
   alias Medusa.Message
-
-  setup do
-    Process.register(self, :self)
-    :ok
-  end
 
   describe "PG2 without clustering" do
 
@@ -17,28 +12,31 @@ defmodule Medusa.Adapter.PG2Test do
     end
 
     test "Send events" do
-      Medusa.consume("foo.bar", &MyModule.echo/1)
-      Medusa.consume("foo.*", &MyModule.echo/1)
-      Medusa.consume("foo.baz", &MyModule.echo/1)
+      myself = pid_to_list(self)
+      consume("foo.bar", &MyModule.echo/1)
+      consume("foo.*", &MyModule.echo/1)
+      consume("foo.baz", &MyModule.echo/1)
       Process.sleep(100)
-      Medusa.publish("foo.bar", "foobar", %{"optional_field" => "nice_to_have"})
+      publish("foo.bar", "foobar", %{"optional_field" => "nice_to_have", from: myself})
       assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
       assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
       refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have"}}
     end
 
     test "Send non-match events" do
-      Medusa.consume("ping.pong", &MyModule.echo/1)
+      myself = pid_to_list(self)
+      consume("ping.pong", &MyModule.echo/1)
       Process.sleep(100)
-      Medusa.publish("ping", "ping")
+      publish("ping", "ping", %{from: myself})
       refute_receive %Message{body: "ping"}
     end
 
     test "Send event to consumer with bind_once: true.
           consumer and producer should die" do
+      myself = pid_to_list(self)
       assert consumer_children() == []
       assert producer_children() == []
-      assert Medusa.consume("local.bind1", &MyModule.echo/1, bind_once: true)
+      assert consume("local.bind1", &MyModule.echo/1, bind_once: true)
       [{_, consumer, _, _}] = consumer_children()
       [{_, producer, _, _}] = producer_children()
       Process.sleep(100)
@@ -46,7 +44,7 @@ defmodule Medusa.Adapter.PG2Test do
       ref_producer = Process.monitor(producer)
       assert Process.alive?(consumer)
       assert Process.alive?(producer)
-      Medusa.publish("local.bind1", "die both")
+      publish("local.bind1", "die both", %{from: myself})
       assert_receive %Message{body: "die both"}
       assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}, 500
       assert_receive {:DOWN, ^ref_producer, :process, _, :normal}, 500
@@ -54,14 +52,15 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true in already exists route
           So producer is shared with others then it should not die" do
+      myself = pid_to_list(self)
       assert consumer_children() == []
       assert producer_children() == []
-      assert Medusa.consume("local.bind2", &MyModule.echo/1)
-      assert Medusa.consume("local.bind2", &MyModule.echo/1, bind_once: true)
+      assert consume("local.bind2", &MyModule.echo/1)
+      assert consume("local.bind2", &MyModule.echo/1, bind_once: true)
       assert length(consumer_children()) == 2
       assert length(producer_children()) == 1
       Process.sleep(100)
-      Medusa.publish("local.bind2", "only con2 die")
+      publish("local.bind2", "only con2 die", %{from: myself})
       assert_receive %Message{body: "only con2 die"}
       assert_receive %Message{body: "only con2 die"}
       Process.sleep(100)
@@ -71,14 +70,15 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true and then
           start consume with long-running consumer, producer should survive" do
+      myself = pid_to_list(self)
       assert consumer_children() == []
       assert producer_children() == []
-      assert Medusa.consume("local.bind3", &MyModule.echo/1, bind_once: true)
-      assert Medusa.consume("local.bind3", &MyModule.echo/1)
+      assert consume("local.bind3", &MyModule.echo/1, bind_once: true)
+      assert consume("local.bind3", &MyModule.echo/1)
       assert length(consumer_children()) == 2
       assert length(producer_children()) == 1
       Process.sleep(100)
-      Medusa.publish("local.bind3", "only con1 die")
+      publish("local.bind3", "only con1 die", %{from: myself})
       assert_receive %Message{body: "only con1 die"}
       assert_receive %Message{body: "only con1 die"}
       Process.sleep(100)

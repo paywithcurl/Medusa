@@ -12,6 +12,6 @@ for ((i=0; i < 10; i++)); do
 done
 
 ## Run the tests
-mix test
+mix test $@
 
 docker rm -f medusa-rabbitmq

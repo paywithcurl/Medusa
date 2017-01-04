@@ -15,20 +15,37 @@ defmodule Medusa.Adapter.RabbitMQ do
     Connection.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  @doc """
+  Get current rabbitmq connction
+  """
   def connection do
     Connection.call(__MODULE__, :rabbitmq_connection)
   end
 
+  @doc """
+  Get current rabbitmq exchange name
+  """
   def exchange do
     Connection.call(__MODULE__, :rabbitmq_exchange)
   end
 
+  @doc """
+  Create a new Producer/Consumer and listen to given topic
+  Producer will only create once for queue_name in `opts`
+  """
   def new_route(topic, function, opts) do
     Connection.call(__MODULE__, {:new_route, topic, function, opts})
   end
 
+  @doc """
+  Publish message
+  """
   def publish(%Message{} = message) do
     Connection.call(__MODULE__, {:publish, message})
+  end
+
+  def alive? do
+    Connection.call(__MODULE__, {:alive})
   end
 
   def init([]) do
@@ -61,18 +78,17 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def handle_call({:new_route, topic, function, opts}, _from, state) do
     Logger.debug("#{__MODULE__}: new route #{inspect topic}")
+
     queue_name =
-      opts
-      |> Keyword.get(:queue_name)
-      |> queue_name(topic, function)
-    opts = Keyword.put(opts, :queue_name, queue_name)
-    with {:ok, p} <- Producer.start_child(topic, opts),
-         {:ok, _} <- Consumer.start_child(function, p, opts) do
+      opts |> Keyword.get(:queue_name) |> queue_name(topic, function)
+    consumers = Keyword.get(opts, :consumers, 1)
+    new_opts = Keyword.put(opts, :queue_name, queue_name)
+
+    with {:ok, p} <- start_producer(topic, new_opts),
+         {:ok, _} <- start_consumer(function, p, new_opts, consumers) do
       {:reply, :ok, state}
     else
-      {:error, {:already_started, _}} ->
-        {:reply, :ok, state}
-      error ->
+      {:error, error} ->
         Logger.error("#{__MODULE__} new_route: #{inspect error}")
         {:reply, {:error, error}, state}
     end
@@ -88,6 +104,28 @@ defmodule Medusa.Adapter.RabbitMQ do
       {:error, reason} ->
         Logger.warn("#{__MODULE__}: publish malformed message #{inspect message}")
         {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:alive}, _from, state) do
+    # The vhost needs to be url encoded in the path as it can contain /
+    # and it needs to be separated from the path itself.
+    # The default path is /
+    # See https://lists.rabbitmq.com/pipermail/rabbitmq-discuss/2012-March/019161.html
+    vhost = URI.encode_www_form(connection_opts[:virtual_host])
+
+    url = "#{admin_opts[:protocol]}://#{connection_opts[:username]}:#{connection_opts[:password]}@#{connection_opts[:host]}:#{admin_opts[:port]}/api/aliveness-test/#{vhost}"
+
+    try do
+      alive = case HTTPoison.get(url, %{}, [timeout: 1_000]) do
+		{:ok, %{status_code: 200, body: "{\"status\":\"ok\"}"}} -> true
+		_ -> false
+	      end
+      {:reply, alive, state}
+    rescue
+      _ -> {:reply, false, state}
+    catch
+      _, _ -> {:reply, false, state}
     end
   end
 
@@ -179,11 +217,14 @@ defmodule Medusa.Adapter.RabbitMQ do
     :ok
   end
 
+  defp admin_opts do
+    Medusa.config
+    |> get_in([:RabbitMQ, :admin])
+  end
+
   defp connection_opts do
     Medusa.config
     |> get_in([:RabbitMQ, :connection])
-    |> Kernel.||([])
-    |> Keyword.put_new(:heartbeat, 10)
   end
 
   defp group_name, do: Medusa.config |> Keyword.get(:group)
@@ -227,6 +268,24 @@ defmodule Medusa.Adapter.RabbitMQ do
     |> :crypto.strong_rand_bytes
     |> Base.url_encode64
     |> binary_part(0, len)
+  end
+
+  defp start_producer(topic, opts) do
+    case Producer.start_child(topic, opts) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp start_consumer(function, producer, opts, times) do
+    range = Range.new(1, times)
+    Enum.map(range, fn _ -> Consumer.start_child(function, producer, opts) end)
+    |> Enum.all?(&elem(&1, 0) == :ok)
+    |> case do
+      true -> {:ok, times}
+      false -> {:error, producer}
+    end
   end
 
 end

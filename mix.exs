@@ -15,7 +15,7 @@ defmodule Medusa.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger], mod: {Medusa, []}]
+    [applications: [:logger, :httpoison], mod: {Medusa, []}]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -37,6 +37,7 @@ defmodule Medusa.Mixfile do
      {:connection, "~> 1.0.4"},
      {:gen_stage, "~> 0.8.0"},
      {:uuid, "~> 1.1" },
+     {:httpoison, "~> 0.10.0"},
      {:poison, "~> 2.0"}]
   end
 end

@@ -13,5 +13,6 @@ defmodule Medusa.Adapter do
 
   @callback new_route(event, fun, opts) :: {:ok, any} | {:error, any}
   @callback publish(message) :: :ok | :error
+  @callback alive? :: :ok | :error
 
 end

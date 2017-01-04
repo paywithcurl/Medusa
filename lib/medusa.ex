@@ -86,6 +86,10 @@ defmodule Medusa do
     end
   end
 
+  def alive? do
+    adapter.alive?
+  end
+
   def adapter do
     MedusaConfig.get_adapter(:medusa_config)
   end
