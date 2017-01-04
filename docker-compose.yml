@@ -20,5 +20,4 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USERNAME=rabbitmq
       - RABBITMQ_PASSWORD=rabbitmq
-      - GROUP=medusa
     command: "bash -c 'cd /usr/src/app && ./run_tests_docker.sh'"

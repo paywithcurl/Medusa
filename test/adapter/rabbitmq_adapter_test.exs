@@ -1,13 +1,13 @@
 defmodule Medusa.Adapter.RabbitMQTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   import Medusa.TestHelper
   import Medusa
   alias Medusa.Message
   alias Medusa.Adapter.RabbitMQ
 
   setup_all do
-    put_adapter_config(Medusa.Adapter.RabbitMQ)
-    {:ok, conn} = AMQP.Connection.open()
+    opts = put_rabbitmq_adapter_config()[:RabbitMQ][:connection]
+    {:ok, conn} = AMQP.Connection.open(opts)
     {:ok, chan} = AMQP.Channel.open(conn)
     {:ok, _} = Agent.start(fn -> MapSet.new() end, name: :queues)
     on_exit fn ->
@@ -94,6 +94,29 @@ defmodule Medusa.Adapter.RabbitMQTest do
       consumers = :sys.get_state(producer).consumers
       assert Map.keys(consumers) |> length == 15
     end
+
+    test "Test connectivity with alive?" do
+      assert Medusa.alive?
+    end
+
+    test "Test connectivity to host timing out with alive?" do
+      config = Application.get_env(:medusa, Medusa)
+
+      # TEST-NET ip from RFC 5737, shouldn't be routable
+      Application.put_env(:medusa, Medusa, invalid_config "192.0.2.0")
+      assert not Medusa.alive?
+      Application.put_env(:medusa, Medusa, config)
+    end
+
+    test "Test connectivity to invalid host with alive?" do
+      config = Application.get_env(:medusa, Medusa)
+
+      # Invalid TLD from RFC 2606
+      Application.put_env(:medusa, Medusa, invalid_config "rabbitmq.invalid")
+      assert not Medusa.alive?
+      Application.put_env(:medusa, Medusa, config)
+    end
+
   end
 
   describe "RabbitMQ re-publish" do
@@ -114,7 +137,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
 
-  describe "Retry on failrue within max_retries" do
+  describe "Retry on failure within max_retries" do
     @tag :rabbitmq
     test "{:error, reason} will retry" do
       myself = pid_to_list(self)
@@ -197,7 +220,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
   end
 
-  describe "Multi functions in consume wrong failrue in the middle" do
+  describe "Multi functions in consume wrong failure in the middle" do
     @tag :rabbitmq
     test "not return %Message{} with drop_on_failure should drop immediately" do
       myself = pid_to_list(self)
@@ -412,6 +435,24 @@ defmodule Medusa.Adapter.RabbitMQTest do
     Process.sleep(1_000)
     publish(topic, body, Map.merge(metadata, %{agent: agent_name}))
     %{agent: agent_name, body: body}
+  end
+
+  defp invalid_config(host) do
+    [
+      adapter: Medusa.Adapter.RabbitMQ,
+      RabbitMQ: %{
+	admin: [
+	  protocol: "http",
+	  port: 15672,
+	],
+	connection: [
+	  host: host,
+	  username: "donald",
+	  password: "boss",
+	  virtual_host: "/"
+	]
+      }
+    ]
   end
 
 end

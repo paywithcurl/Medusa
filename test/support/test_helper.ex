@@ -14,16 +14,38 @@ defmodule Medusa.TestHelper do
       retry_publish_backoff: 500,
       retry_publish_max: 1,
       retry_consume_pow_base: 0,
+    ]
+    Application.put_env(:medusa, Medusa, opts, persistent: true)
+    restart_app()
+    opts
+  end
+
+  def put_rabbitmq_adapter_config do
+    import Supervisor.Spec, warn: false
+    opts = [
+      adapter: Medusa.Adapter.RabbitMQ,
+      group: "test-rabbitmq",
+      retry_publish_backoff: 500,
+      retry_publish_max: 1,
+      retry_consume_pow_base: 0,
       RabbitMQ: %{
+	admin: [
+	  protocol: System.get_env("RABBITMQ_ADMIN_PROTOCOL") || "http",
+	  port: String.to_integer(System.get_env("RABBITMQ_ADMIN_PORT") || "15672"),
+	],
 	connection: [
 	  host: System.get_env("RABBITMQ_HOST") || "127.0.0.1",
 	  username: System.get_env("RABBITMQ_USERNAME") || "guest",
 	  password: System.get_env("RABBITMQ_PASSWORD") || "guest",
+	  port: String.to_integer(System.get_env("RABBITMQ_PORT") || "5672"),
+	  virtual_host: System.get_env("RABBITMQ_VIRTUAL_HOST") || "/",
+	  heartbeat: 10,
 	]
       }
     ]
     Application.put_env(:medusa, Medusa, opts, persistent: true)
     restart_app()
+    opts
   end
 
   def consumer_children do
