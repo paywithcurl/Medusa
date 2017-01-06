@@ -35,6 +35,8 @@ defmodule Medusa do
     ensure_config_correct()
     {:ok, supervisor} = Supervisor.start_link([], [strategy: :one_for_one, name: Medusa.Supervisor])
 
+    Logger.add_backend Logger.Backends.JSON
+
     # MedusaConfig needs to be started before child_adapter is called
     {:ok, _} = Supervisor.start_child(supervisor, config_worker)
     children =

@@ -15,7 +15,7 @@ defmodule Medusa.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :httpoison], mod: {Medusa, []}]
+    [applications: [:logger, :httpoison, :json_logger], mod: {Medusa, []}]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -36,6 +36,7 @@ defmodule Medusa.Mixfile do
      {:amqp_client, git: "https://github.com/dsrosario/amqp_client.git", branch: "erlang_otp_19", override: true},
      {:connection, "~> 1.0.4"},
      {:gen_stage, "~> 0.8.0"},
+     {:json_logger, "~> 0.6.0"},
      {:uuid, "~> 1.1" },
      {:httpoison, "~> 0.10.0"},
      {:poison, "~> 2.0"}]

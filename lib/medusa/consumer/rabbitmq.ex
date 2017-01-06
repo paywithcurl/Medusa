@@ -6,6 +6,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   alias Medusa.Message
 
   def start_link(args) do
+    Logger.metadata(service: System.get_env("SERVICE_NAME"))
     to_link =
       args |> get_in([:opts, :queue_name]) |> String.to_atom |> Process.whereis
     params = %{
@@ -75,6 +76,8 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [function], original_message, state) do
     try do
+      Logger.info("medusa.event.processed", [message_id: message.body[:id], topic: message.topic])
+
       case function.(message) do
         :ok -> ack_message(original_message)
         :error ->
@@ -103,6 +106,8 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [function|tail], original_message, state) do
     try do
+      Logger.info("medusa.event.processed", [message_id: message.body[:id], topic: message.topic])
+
       case function.(message) do
         new = %Message{} -> do_event(new, tail, original_message, state)
         error ->
