@@ -79,7 +79,19 @@ defmodule Medusa do
     |> validate_message(message)
     |> case do
       :ok ->
-        adapter().publish(message)
+        case adapter().publish(message) do
+          :ok ->
+            Logger.info("message published")
+            Logger.info(message |> Map.delete(:body) |> inspect)
+            # Body should always come in the same format.
+            Logger.debug(message.body |> inspect)
+            :ok
+          other ->
+            Logger.error("message not published #{other |> inspect}")
+            Logger.error(message |> inspect)
+            other
+        end
+
       {:error, reason} ->
         Logger.warn "Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}"
         {:error, "message is invalid"}
