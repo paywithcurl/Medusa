@@ -76,7 +76,9 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [function], original_message, state) do
     try do
-      Logger.info("medusa.event.processed", [message_id: message.body[:id], topic: message.topic])
+      IO.inspect(message)
+      IO.inspect(original_message)
+      Logger.warn("medusa.event.processed", [message_id: message.body[:id], topic: message.topic])
 
       case function.(message) do
         :ok -> ack_message(original_message)
