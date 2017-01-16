@@ -41,4 +41,13 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
       [applications: [:medusa]]
     end
     ```
+## Contributing
 
+Run tests with the included test script.
+Arguments pasted to this script will be forwarded to mix test.
+This allows the test runner to execute single tests.
+
+```
+./run_test.sh
+./run_test.sh test/my_test:10
+```
