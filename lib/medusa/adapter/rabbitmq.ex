@@ -77,7 +77,6 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_call({:new_route, topic, function, opts}, _from, state) do
-    Logger.debug("#{__MODULE__}: new route #{inspect topic}")
 
     queue_name =
       opts |> Keyword.get(:queue_name) |> queue_name(topic, function)
@@ -96,13 +95,11 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def handle_call({:publish, %Message{} = message}, _from, state) do
     topic = message.topic
-    Logger.debug("#{__MODULE__}: publish #{inspect message}")
     case Poison.encode(message) do
       {:ok, message} ->
         {reply, new_state} = do_publish(topic, message, 0, state)
         {:reply, reply, new_state}
       {:error, reason} ->
-        Logger.warn("#{__MODULE__}: publish malformed message #{inspect message}")
         {:reply, {:error, reason}, state}
     end
   end

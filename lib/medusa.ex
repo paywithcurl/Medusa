@@ -53,7 +53,25 @@ defmodule Medusa do
   @doc """
   Adds a new route using the configured adapter.
   """
-  def consume(route, functions, opts \\ []) do
+  def consume(route, action, opts \\ [])
+  def consume(route, action, opts) when is_function(action, 1) do
+    callback = fn(message) ->
+      case action.(message) do
+        # TODO make this more specific {:ok, message} {:error, reason}
+        :ok ->
+          Logger.info("message consumed")
+          Logger.info(message |> Map.delete(:body) |> inspect)
+          Logger.debug(message.body |> inspect)
+          :ok
+        other ->
+          Logger.error("message not published #{other |> inspect}")
+          Logger.error(message |> inspect)
+          other
+      end
+    end
+    adapter().new_route(route, callback, opts)
+  end
+  def consume(route, functions, opts) do
     case validate_consume_function(functions) do
       :ok ->
         adapter().new_route(route, functions, opts)

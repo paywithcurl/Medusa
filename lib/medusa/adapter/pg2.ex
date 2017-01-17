@@ -2,7 +2,6 @@ defmodule Medusa.Adapter.PG2 do
   @moduledoc false
   @behaviour Medusa.Adapter
   use GenServer
-  require Logger
   alias Medusa.{Broker, Message}
 
   def start_link do
@@ -28,13 +27,11 @@ defmodule Medusa.Adapter.PG2 do
   end
 
   def handle_call({:new_route, event, function, opts}, _from, state) do
-    Logger.debug "#{inspect __MODULE__}: [#{inspect event}]"
     {_producer, _consumer} = Broker.start_producer_consumer(event, function, opts)
     {:reply, :ok, MapSet.put(state, event)}
   end
 
   def handle_call({:publish, %Message{} = message}, _from, state) do
-    Logger.debug("#{inspect __MODULE__}: #{inspect message}")
     Enum.each(state, &Broker.maybe_route({&1, message.topic, message}))
     {:reply, :ok, state}
   end

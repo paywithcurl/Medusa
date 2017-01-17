@@ -14,7 +14,6 @@ defmodule Medusa.Consumer.PG2 do
   end
 
   def init(%{to_link: link} = params) do
-    Logger.debug("Starting #{__MODULE__} for: #{inspect params}")
     {:consumer, params, subscribe_to: [link]}
   end
 
@@ -22,7 +21,6 @@ defmodule Medusa.Consumer.PG2 do
   Process the event passing the argument to the function.
   """
   def handle_events(events, _from, state) do
-    Logger.debug("#{__MODULE__} Received event: #{inspect events}")
     events
     |> List.flatten
     |> do_handle_events(state)
