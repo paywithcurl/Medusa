@@ -71,13 +71,27 @@ defmodule Medusa do
     end
     adapter().new_route(route, callback, opts)
   end
-  def consume(route, functions, opts) do
-    case validate_consume_function(functions) do
-      :ok ->
-        adapter().new_route(route, functions, opts)
-      {:error, reason} ->
-        Logger.warn("#{inspect reason}")
-        {:error, reason}
+  def consume(route, functions, opts) when is_list(functions) do
+    case compose(functions) do
+      {:ok, function} ->
+        adapter().new_route(route, function, opts)
+      {:error, :invalid_function} ->
+        Logger.warn("consume must be function")
+        {:error, :invalid_function}
+    end
+  end
+
+  def compose([f]) do
+    {:ok, f}
+  end
+  def compose([a, b | rest]) do
+    if is_function(a, 1) and is_function(b, 1) do
+      f = fn(x) ->
+        b.(a.(x))
+      end
+      compose([f | rest])
+    else
+      {:error, :invalid_function}
     end
   end
 
@@ -176,25 +190,6 @@ defmodule Medusa do
         new_app_config = Keyword.merge(app_config, [adapter: @default_adapter])
         Application.put_env(:medusa, Medusa, new_app_config, persistent: true)
     end
-  end
-
-  defp validate_consume_function(function) when is_function(function) do
-    validate_consume_function([function])
-  end
-
-  defp validate_consume_function([]) do
-    :ok
-  end
-
-  defp validate_consume_function([function|tail]) when is_function(function) do
-    case :erlang.fun_info(function, :arity) do
-      {:arity, 1} -> validate_consume_function(tail)
-      _ -> {:error, "arity must be 1"}
-    end
-  end
-
-  defp validate_consume_function(_) do
-    {:error, "consume must be function"}
   end
 
   defp do_validate_message([], _message) do

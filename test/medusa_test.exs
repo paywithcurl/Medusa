@@ -4,6 +4,13 @@ defmodule MedusaTest do
 
   doctest Medusa
 
+  test "composition" do
+    double = fn(x) -> x * 2 end
+    inc = fn(x) -> x + 1 end
+    {:ok, f} = Medusa.compose([inc, inc, double])
+    assert 14 == f.(5)
+  end
+
   test "not config should fallback to default" do
     Application.delete_env(:medusa, Medusa, persistent: true)
     Application.stop(:medusa)
@@ -34,6 +41,7 @@ defmodule MedusaTest do
       assert Process.whereis(:"foo.bob")
     end
 
+    @tag :skip
     test "Add invalid consumer" do
       result = Medusa.consume("foo.bob", fn -> IO.puts("blah") end)
       assert result == {:error, "arity must be 1"}
@@ -43,7 +51,7 @@ defmodule MedusaTest do
       assert capture_log(fn() ->
         functions = [&IO.inspect/1, :not_a_function]
         result = Medusa.consume("foo.bob", functions)
-        assert result == {:error, "consume must be function"}
+        assert result == {:error, :invalid_function}
       end) =~ "consume must be function"
     end
 
