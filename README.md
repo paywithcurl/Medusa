@@ -51,29 +51,3 @@ This allows the test runner to execute single tests.
 ./run_test.sh
 ./run_test.sh test/my_test:10
 ```
-
-## Alt
-
-```elixir
-defmodule Ching.Publisher do
-  use Medusa.Publisher
-
-  @login_requested "user.login"
-
-  def login_request(data = %User.Login{}, ref) do
-    metadata = %{id: "id", host: ref.host}
-    publish(@login_requested, data, metadata)
-  end
-end
-
-{:ok, channel} = get_channel
-{:ok, message_id} = Ching.Publisher.login_requested(%{user: "steve"}, channel)
-
-defmodule Ching.Consumer do
-
-  consume do
-    "foo.*" -> # etc
-    "foo.bar" -> # etc
-  end
-end
-```
