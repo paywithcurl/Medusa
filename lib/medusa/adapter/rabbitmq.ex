@@ -50,13 +50,13 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def init([]) do
     timeout = Medusa.config |> Keyword.get(:retry_publish_backoff, 5_000)
-    :timer.send_interval(timeout, self, :republish)
+    :timer.send_interval(timeout, self(), :republish)
     {:connect, :init, %__MODULE__{}}
   end
 
   def connect(_, state) do
     Logger.debug("#{__MODULE__} connecting")
-    opts = connection_opts
+    opts = connection_opts()
     ensure_channel_closed(state.channel)
     case AMQP.Connection.open(opts) do
       {:ok, conn} ->
@@ -112,9 +112,13 @@ defmodule Medusa.Adapter.RabbitMQ do
     # and it needs to be separated from the path itself.
     # The default path is /
     # See https://lists.rabbitmq.com/pipermail/rabbitmq-discuss/2012-March/019161.html
-    vhost = URI.encode_www_form(connection_opts[:virtual_host])
-
-    url = "#{admin_opts[:protocol]}://#{connection_opts[:username]}:#{connection_opts[:password]}@#{connection_opts[:host]}:#{admin_opts[:port]}/api/aliveness-test/#{vhost}"
+    vhost = URI.encode_www_form(connection_opts()[:virtual_host])
+    protocol = admin_opts()[:protocol]
+    port = admin_opts()[:port]
+    username = connection_opts()[:username]
+    password = connection_opts()[:password]
+    host = connection_opts()[:host]
+    url = "#{protocol}://#{username}:#{password}@#{host}:#{port}/api/aliveness-test/#{vhost}"
 
     try do
       alive = case HTTPoison.get(url, %{}, [timeout: 1_000]) do
@@ -187,7 +191,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_info(msg, state) do
-    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self}")
+    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
@@ -230,7 +234,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   defp group_name, do: Medusa.config |> Keyword.get(:group)
 
   defp queue_name(name, topic, function) do
-    group = group_name || random_name
+    group = group_name() || random_name()
     "#{group}.#{do_queue_name(name, group, topic, function)}"
   end
 

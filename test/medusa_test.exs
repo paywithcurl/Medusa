@@ -22,7 +22,7 @@ defmodule MedusaTest do
 
   describe "Consumer" do
     setup do
-      Process.register(self, :self)
+      Process.register(self(), :self)
       :ok
     end
 

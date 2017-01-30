@@ -12,7 +12,7 @@ defmodule Medusa.Adapter.PG2Test do
     end
 
     test "Send events" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       consume("foo.bar", &MyModule.echo/1)
       consume("foo.*", &MyModule.echo/1)
       consume("foo.baz", &MyModule.echo/1)
@@ -24,7 +24,7 @@ defmodule Medusa.Adapter.PG2Test do
     end
 
     test "Send non-match events" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       consume("ping.pong", &MyModule.echo/1)
       Process.sleep(100)
       publish("ping", "ping", %{from: myself})
@@ -33,7 +33,7 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true.
           consumer and producer should die" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       assert consumer_children() == []
       assert producer_children() == []
       assert consume("local.bind1", &MyModule.echo/1, bind_once: true)
@@ -52,7 +52,7 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true in already exists route
           So producer is shared with others then it should not die" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       assert consumer_children() == []
       assert producer_children() == []
       assert consume("local.bind2", &MyModule.echo/1)
@@ -70,7 +70,7 @@ defmodule Medusa.Adapter.PG2Test do
 
     test "Send event to consumer with bind_once: true and then
           start consume with long-running consumer, producer should survive" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       assert consumer_children() == []
       assert producer_children() == []
       assert consume("local.bind3", &MyModule.echo/1, bind_once: true)

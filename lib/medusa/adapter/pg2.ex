@@ -14,7 +14,12 @@ defmodule Medusa.Adapter.PG2 do
   end
 
   def publish(%Message{} = message) do
-    broadcast(get_members, {:publish, message})
+    broadcast(get_members(), {:publish, message})
+  end
+
+  # behaviour
+  def alive? do
+    true
   end
 
   @doc """
@@ -23,7 +28,7 @@ defmodule Medusa.Adapter.PG2 do
   def init(_opts) do
     group = pg2_namespace()
     :ok = :pg2.create(group)
-    :ok = :pg2.join(group, self)
+    :ok = :pg2.join(group, self())
     {:ok, MapSet.new}
   end
 
@@ -49,7 +54,7 @@ defmodule Medusa.Adapter.PG2 do
     name =
       :medusa
       |> Application.get_env(Medusa)
-      |> Keyword.get(:group, random_name)
+      |> Keyword.get(:group, random_name())
     {:medusa, name}
   end
 
@@ -80,7 +85,7 @@ defmodule Medusa.Adapter.PG2 do
 
   # get all medusa groups and random one member from each group
   defp get_members do
-    get_all_members
+    get_all_members()
     |> Enum.map(&random_member/1)
   end
 
