@@ -35,7 +35,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   def handle_info(msg, state) do
-    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self}")
+    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
@@ -125,13 +125,11 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp retry_event(%Message{} = message, state) do
     max_retries = state.opts[:max_retries] || 1
-    message = update_in(message,
-                        [Access.key(:metadata), "retry"],
-                        &((&1 || 0) + 1))
+    message = update_in(message.metadata["retry"], &((&1 || 0) + 1))
     if message.metadata["retry"] <= max_retries do
       base = Medusa.config |> Keyword.get(:retry_consume_pow_base, 2)
       time = base |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
-      Process.send_after(self, {:retry, message}, time)
+      Process.send_after(self(), {:retry, message}, time)
     else
       Logger.warn("Failed processing message #{inspect message}")
       drop_or_requeue_message(message, state)

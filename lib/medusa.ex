@@ -36,7 +36,7 @@ defmodule Medusa do
     {:ok, supervisor} = Supervisor.start_link([], [strategy: :one_for_one, name: Medusa.Supervisor])
 
     # MedusaConfig needs to be started before child_adapter is called
-    {:ok, _} = Supervisor.start_child(supervisor, config_worker)
+    {:ok, _} = Supervisor.start_child(supervisor, config_worker())
     children =
       [
         child_adapter(),
@@ -87,7 +87,7 @@ defmodule Medusa do
   end
 
   def alive? do
-    adapter.alive?
+    adapter().alive?
   end
 
   def adapter do
@@ -117,12 +117,12 @@ defmodule Medusa do
   end
 
   defp child_adapter do
-    adapter
+    adapter()
     |> worker([])
   end
 
   defp child_queue do
-    case adapter do
+    case adapter() do
       Medusa.Adapter.PG2 -> worker(Medusa.Queue, [])
       _ -> []
     end

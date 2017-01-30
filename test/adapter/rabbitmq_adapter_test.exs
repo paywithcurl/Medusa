@@ -37,7 +37,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "RabbitMQ basic" do
     @tag :rabbitmq
     test "Send events" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       publish("foo.bar", "foobar", %{"from" => myself})
       assert_receive %Message{body: "foobar", metadata: %{"event" => "foo.bar"}}, 1_000
       assert_receive %Message{body: "foobar", metadata: %{"event" => "foo.bar"}}, 1_000
@@ -53,7 +53,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "Send event to consumer with bind_once: true.
           consumer and producer should die" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       producer = Process.whereis(:"test-rabbitmq.bind1")
       assert producer
       consumers = :sys.get_state(producer).consumers
@@ -67,7 +67,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "Send event to consumer with bind_once: true should not kill other producer-consumer" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       producer = Process.whereis(:"test-rabbitmq.bind2")
       assert producer
       consumers = :sys.get_state(producer).consumers
@@ -122,15 +122,15 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "RabbitMQ re-publish" do
     @tag :rabbitmq
     test "publish when no connection is queue and resend when re-connected" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       adapter = Process.whereis(RabbitMQ)
-      path = [ Access.key(:mod_state), Access.key(:channel) ]
+      path = [ Access.key!(:mod_state), Access.key!(:channel) ]
       :sys.replace_state(adapter, &put_in(&1, path, nil))
       assert publish("rabbit.republish", "foo", %{"from" => myself}) ==
         {:error, "cannot connect rabbitmq"}
       assert publish("rabbit.republish", "bar", %{"from" => myself}) ==
         {:error, "cannot connect rabbitmq"}
-      send(adapter, {:DOWN, make_ref(), :process, self, :test})
+      send(adapter, {:DOWN, make_ref(), :process, self(), :test})
       assert_receive %Message{body: "foo"}, 1_000
       assert_receive %Message{body: "bar"}, 1_000
     end
@@ -140,7 +140,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Retry on failure within max_retries" do
     @tag :rabbitmq
     test "{:error, reason} will retry" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.state/1,
                                       %{times: 1, from: myself},
                                       max_retries: 1)
@@ -149,7 +149,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "raise will retry" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.state/1,
                                       %{times: 2, raise: true, from: myself},
                                       max_retries: 5)
@@ -158,7 +158,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "throw will retry" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.state/1,
                                       %{times: 5, throw: true, from: myself},
                                       max_retries: 10)
@@ -167,7 +167,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "exit will retry" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.state/1,
                                       %{times: 2, http_error: true, from: myself},
                                       max_retries: 5)
@@ -178,7 +178,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Drop message when reach max_retries" do
     @tag :rabbitmq
     test "setting drop_on_failure retry until reach maximum before drop" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume(&MyModule.state/1,
                                    %{times: 10, from: myself},
                                    drop_on_failure: true)
@@ -189,7 +189,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Requeue message when reach max_retries" do
     @tag :rabbitmq
     test "retry until reach maximum before requeue" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.state/1,
                                       %{times: 3, from: myself},
                                       drop_on_failure: false)
@@ -200,7 +200,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Wrong return value" do
     @tag :rabbitmq
     test "not return :ok, :error, {:error, reason} will drop message immediately" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume(&MyModule.state/1,
                            %{times: 2, bad_return: true, from: myself},
                            drop_on_failure: false)
@@ -211,7 +211,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Multi functions in consume Success" do
     @tag :rabbitmq
     test "consume many functions consumer do it in sequence" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.reverse/1, &MyModule.echo/1],
                                       %{ from: myself},
                                       drop_on_failure: true)
@@ -223,7 +223,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Multi functions in consume wrong failure in the middle" do
     @tag :rabbitmq
     test "not return %Message{} with drop_on_failure should drop immediately" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.error/1, &MyModule.echo/1],
                                    %{from: myself},
                                    drop_on_failure: true)
@@ -232,7 +232,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "not return %Message{} with no drop_on_failure should requeue" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
                                       %{times: 2, middleware: true, from: myself},
                               drop_on_failure: false)
@@ -241,7 +241,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "raise with no drop_on_failure should requeue" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
                                       %{times: 2, middleware: true, raise: true, from: myself})
       assert_receive %Message{body: ^body}, 1_000
@@ -249,7 +249,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "throw with no drop_on_failure should requeue" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
                                       %{times: 2, middleware: true, throw: true, from: myself})
       assert_receive %Message{body: ^body}, 1_000
@@ -259,7 +259,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Multi functions in consume failure in last function" do
     @tag :rabbitmq
     test "not return :ok, :error or {:error, reason} should drop it immediately" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.reverse/1],
                                    %{from: myself},
                                    drop_on_failure: false)
@@ -268,7 +268,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test ":error with drop_on_failure should drop immediately" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.error/1],
                                    %{from: myself},
                                    drop_on_failure: true)
@@ -277,7 +277,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test ":error with no drop_on_failure should requeue" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                       %{times: 2, from: myself})
       body = String.reverse(body)
@@ -286,7 +286,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "{:error, reason} with drop_on_failure should drop immediately after retries" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                    %{times: 100, from: myself},
                                    drop_on_failure: true)
@@ -295,7 +295,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "{:error, reason} with no drop_on_failure should requeue after retries" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                       %{times: 5, from: myself},
                                       max_retries: 3)
@@ -305,7 +305,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "raise with drop_on_failure should drop immediately after retries" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                    %{times: 5, raise: true, from: myself},
                                    max_retries: 3, drop_on_failure: true)
@@ -314,7 +314,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "raise with no drop_on_failure should requeue after retries" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                       %{times: 5, raise: true, from: myself},
                                       max_retries: 3, drop_on_failure: false)
@@ -324,7 +324,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "throw with drop_on_failure should drop immediately after retries" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                    %{times: 5, throw: true, from: myself},
                                    max_retries: 3, drop_on_failure: true)
@@ -333,7 +333,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "throw with no drop_on_failure should nack message" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume([&MyModule.reverse/1, &MyModule.state/1],
                                    %{times: 5, throw: true, from: myself},
                                    max_retries: 3, drop_on_failure: true)
@@ -344,7 +344,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "Validators" do
     @tag :rabbitmq
     test "Only global validator and :ok" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       %{body: body} = publish_consume(&MyModule.echo/1, %{from: myself})
       assert_receive %Message{body: ^body}, 1_000
@@ -352,7 +352,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "Only global validator and {:error, reason}" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       MedusaConfig.set_message_validator(:medusa_config, &always_error/1)
       %{body: _} = publish_consume(&MyModule.echo/1, %{from: myself})
       refute_receive %Message{}, 1_000
@@ -360,7 +360,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "With 1 extra validator and both: ok" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       %{body: body} = publish_consume(&MyModule.echo/1,
                                       %{from: myself},
@@ -370,7 +370,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "With only extra validator and :ok" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.echo/1,
                                       %{from: myself},
                                       message_validators: &always_ok/1)
@@ -380,7 +380,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     @tag :rabbitmq
     test "With list of extra validators and all :ok" do
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: body} = publish_consume(&MyModule.echo/1,
                                       %{from: myself},
                                       message_validators: [&always_ok/1, &always_ok/1])
@@ -389,7 +389,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "With error extra validator in the middle" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume(&MyModule.echo/1,
                                    %{from: myself},
                                    message_validators: [&always_error/1, &always_ok/1])
@@ -398,7 +398,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "With error extra validator in the end" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       %{body: _} = publish_consume(&MyModule.echo/1,
                                    %{from: myself}, message_validators: [&always_ok/1, &always_error/1])
       refute_receive %Message{}, 1_000
@@ -406,7 +406,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
     @tag :rabbitmq
     test "With error extra validator in the global" do
-      myself = pid_to_list(self)
+      myself = pid_to_list(self())
       MedusaConfig.set_message_validator(:medusa_config, &always_error/1)
       %{body: _} = publish_consume(&MyModule.echo/1,
                                    %{from: myself},
@@ -423,7 +423,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     32 |> :crypto.strong_rand_bytes |> Base.encode64
   end
 
-  defp publish_consume(functions, metadata \\ %{}, opts \\ []) do
+  defp publish_consume(functions, metadata, opts \\ []) do
     agent_name = random_string() |> String.to_atom
     body = random_string()
     topic = random_string()
