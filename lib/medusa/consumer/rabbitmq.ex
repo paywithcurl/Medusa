@@ -126,7 +126,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   defp retry_event(%Message{} = message, state) do
     max_retries = state.opts[:max_retries] || 1
     message = update_in(message,
-                        [Access.key(:metadata), "retry"],
+                        [Access.key!(:metadata), "retry"],
                         &((&1 || 0) + 1))
     if message.metadata["retry"] <= max_retries do
       base = Medusa.config |> Keyword.get(:retry_consume_pow_base, 2)
