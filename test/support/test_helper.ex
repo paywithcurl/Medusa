@@ -1,5 +1,6 @@
 defmodule Medusa.TestHelper do
   @moduledoc false
+  require Logger
 
   def restart_app do
     Application.stop(:medusa)
@@ -29,20 +30,18 @@ defmodule Medusa.TestHelper do
       retry_publish_max: 1,
       retry_consume_pow_base: 0,
       RabbitMQ: %{
-	admin: [
-	  protocol: System.get_env("RABBITMQ_ADMIN_PROTOCOL") || "http",
-	  port: String.to_integer(System.get_env("RABBITMQ_ADMIN_PORT") || "15672"),
-	],
-	connection: [
-	  host: System.get_env("RABBITMQ_HOST") || "127.0.0.1",
-	  username: System.get_env("RABBITMQ_USERNAME") || "guest",
-	  password: System.get_env("RABBITMQ_PASSWORD") || "guest",
-	  port: String.to_integer(System.get_env("RABBITMQ_PORT") || "5672"),
-	  virtual_host: System.get_env("RABBITMQ_VIRTUAL_HOST") || "/",
-	  heartbeat: 10,
-	]
-      }
-    ]
+        admin: [
+          protocol: System.get_env("RABBITMQ_ADMIN_PROTOCOL") || "http",
+          port: String.to_integer(System.get_env("RABBITMQ_ADMIN_PORT") || "15672"),
+        ],
+      connection: [
+        host: System.get_env("RABBITMQ_HOST") || "127.0.0.1",
+        username: System.get_env("RABBITMQ_USERNAME") || "guest",
+        password: System.get_env("RABBITMQ_PASSWORD") || "guest",
+        port: String.to_integer(System.get_env("RABBITMQ_PORT") || "5672"),
+        virtual_host: System.get_env("RABBITMQ_VIRTUAL_HOST") || "/",
+        heartbeat: 10,
+      ]}]
     Application.put_env(:medusa, Medusa, opts, persistent: true)
     restart_app()
     opts
@@ -56,45 +55,39 @@ defmodule Medusa.TestHelper do
     Supervisor.which_children(Medusa.ProducerSupervisor)
   end
 
-  def pid_to_list(pid) when is_pid(pid) do
-    :erlang.pid_to_list(pid)
+  def publish_test_message(event, body, metadata \\ %{}) do
+    new_metadata = Map.put(metadata, "from", :erlang.pid_to_list(self()))
+    Medusa.publish(event, body, new_metadata)
   end
 
-  def list_to_pid(list) when is_list(list) do
-    :erlang.list_to_pid(list)
-  end
-
-end
-
-defmodule MyModule do
-  alias Medusa.Message
-  import Medusa.TestHelper
-
-  def echo(message) do
-    message.metadata["from"] |> send_message_back(message)
-    :ok
-  end
-
-  def error(_) do
+  def error_message(_) do
     :error
   end
 
-  def reverse(%Message{body: body} = message) do
+  def reverse_message(%Medusa.Message{body: body} = message) do
     %{message | body: String.reverse(body)}
   end
 
-  def state(%{metadata: %{"agent" => agent,
+  def forward_message_to_test(%{metadata: %{"from" => from}} = message) when is_list(from) do
+    pid = :erlang.list_to_pid(from)
+    case Process.alive?(pid) do
+      true -> send(pid, message)
+      false -> Logger.warn("CONSUMER PROCESS NOT ALIVE!")
+    end
+    :ok
+  end
+
+  def message_to_test(%{metadata: %{
                           "times" => times,
                           "from" => from} = metadata} = message) do
-    val = agent |> String.to_atom |> Agent.get_and_update(&({&1, &1+1}))
+    retry = metadata["retry"] || 0
     cond do
       metadata["bad_return"] ->
         :bad_return
-      val == times && metadata["middleware"] ->
+      retry == times && metadata["middleware"] ->
         message
-      val == times ->
-        send_message_back(from, message)
-        :ok
+      retry == times ->
+        forward_message_to_test(message)
       metadata["raise"] ->
         raise "Boom!"
       metadata["throw"] ->
@@ -102,12 +95,19 @@ defmodule MyModule do
       metadata["http_error"] ->
         :gen_tcp.connect('bogus url', 80, [])
       true ->
-        {:error, val}
+        {:error, retry}
     end
   end
 
-  defp send_message_back(list, message) when is_list(list) do
-    pid = list_to_pid(list)
-    if Process.alive?(pid), do: send(pid, message)
+    def delete_all_queues() do
+    rabbit_conf = Application.get_env(:medusa, Medusa)[:"RabbitMQ"]
+    admin_conf = rabbit_conf[:admin]
+    conn_conf = rabbit_conf[:connection]
+    hackney = [basic_auth: {conn_conf[:username], conn_conf[:password]}]
+    vhost = URI.encode_www_form(conn_conf[:virtual_host])
+    url = "#{admin_conf[:protocol]}://#{conn_conf[:host]}:#{admin_conf[:port]}/api/queues/#{vhost}"
+    %{body: body} = HTTPoison.get!(url, [], hackney: hackney)
+    Poison.decode!(body)
+    |> Enum.map(&HTTPoison.delete!("#{url}/#{&1["name"]}", [], hackney: hackney))
   end
 end
