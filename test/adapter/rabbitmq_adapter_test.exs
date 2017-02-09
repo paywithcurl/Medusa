@@ -46,40 +46,40 @@ defmodule Medusa.Adapter.RabbitMQTest do
                          &message_to_test/1,
                          queue_name: "rabbit_retry_failed_test_1",
                          max_retries: 1,
-                         drop_on_failure: true)
+                         on_failure: :drop)
     :ok = Medusa.consume("rabbit.retry.requeue1",
                          &message_to_test/1,
                          queue_name: "rabbit_retry_requeue_test_1",
                          max_retries: 1,
-                         drop_on_failure: false)
+                         on_failure: :keep)
     :ok = Medusa.consume("rabbit.wrong1",
                          &message_to_test/1,
                          queue_name: "rabbit_wrong_test_1",
                          max_retries: 1,
-                         drop_on_failure: false)
+                         on_failure: :keep)
     :ok = Medusa.consume("rabbit.multi1",
                          [&reverse_message/1, &forward_message_to_test/1],
                          queue_name: "rabbit_multi_test_1")
     :ok = Medusa.consume("rabbit.multi.failed1",
                          [&error_message/1, &forward_message_to_test/1],
                          queue_name: "rabbit_multi_failed_test_1",
-                         drop_on_failure: true)
+                         on_failure: :drop)
     :ok = Medusa.consume("rabbit.multi.failed3",
                          [&reverse_message/1, &reverse_message/1],
                          queue_name: "rabbit_multi_failed_test_3",
-                         drop_on_failure: false)
+                         on_failure: :keep)
     :ok = Medusa.consume("rabbit.multi.failed4",
                          [&reverse_message/1, &error_message/1],
                          queue_name: "rabbit_multi_failed_test_4",
-                         drop_on_failure: true)
+                         on_failure: :drop)
     :ok = Medusa.consume("rabbit.multi.failed5",
                          [&reverse_message/1, &message_to_test/1],
                          queue_name: "rabbit_multi_failed_test_5",
-                         drop_on_failure: false)
+                         on_failure: :keep)
     :ok = Medusa.consume("rabbit.multi.failed6",
                          [&reverse_message/1, &message_to_test/1],
                          queue_name: "rabbit_multi_failed_test_6",
-                         drop_on_failure: true)
+                         on_failure: :drop)
     :ok = Medusa.consume("rabbit.validator1",
                          &forward_message_to_test/1,
                          queue_name: "rabbit_validator_test_1")
@@ -245,7 +245,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
   describe "Drop message when reach max_retries" do
-    test "setting drop_on_failure retry until reach maximum before drop" do
+    test "setting on_failure to :drop retry until reach maximum before drop" do
       body = random_string()
       publish_test_message("rabbit.retry.failed1", body, %{"times" => 2})
       refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry.failed1"}}, 1_000
@@ -278,17 +278,17 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
   describe "Multi functions in consume wrong failure in the middle" do
-    test "not return %Message{} with drop_on_failure should drop immediately" do
+    test "not return %Message{} with on_failure to :drop should drop immediately" do
       body = random_string()
       publish_test_message("rabbit.multi.failed1", body)
       refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed1"}}, 1_000
     end
 
-    # test "not return %Message{} with no drop_on_failure should requeue" do
+    # test "not return %Message{} with on_failure to :keep should requeue" do
     #   myself = pid_to_list(self())
     #   %{body: body} = publish_consume([&MyModule.state/1, &MyModule.echo/1],
     #                                   %{times: 2, middleware: true, from: myself},
-    #                           drop_on_failure: false)
+    #                           on_failure: :keep)
     #   assert_receive %Message{body: ^body}, 1_000
     # end
   end
@@ -300,19 +300,19 @@ defmodule Medusa.Adapter.RabbitMQTest do
       refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed3"}}, 1_000
     end
 
-    test ":error with drop_on_failure should drop immediately" do
+    test ":error with on_failure to :drop should drop immediately" do
       body = random_string()
       publish_test_message("rabbit.multi.failed4", body)
       refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed4"}}, 1_000
     end
 
-    # test ":error with no drop_on_failure should requeue" do
+    # test ":error with on_failure to :keep should requeue" do
     #   body = random_string()
     #   publish_test_message("rabbit.multi.failed5", body)
     #   assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed5"}}, 1_000
     # end
 
-    test ":error with drop_on_failure should drop immediately after reach max retries" do
+    test ":error with on_failure to :drop should drop immediately after reach max retries" do
       body = random_string()
       publish_test_message("rabbit.multi.failed6", body, %{times: 100})
       refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed6"}}, 1_000
