@@ -141,15 +141,38 @@ defmodule Medusa.Consumer.RabbitMQ do
     {:noreply, [], state}
   end
 
-  defp drop_or_requeue_message(%Message{} = message,
-                               %{opts: %{on_failure: :drop}}) do
+  defp drop_or_requeue_message(
+      %Message{} = message,
+      %{opts: %{on_failure: :drop}}) do
     drop_message(message)
   end
 
-  defp drop_or_requeue_message(%Message{} = message,
-                               %{opts: %{on_failure: :keep}}) do
+  defp drop_or_requeue_message(
+      %Message{} = message,
+      %{opts: %{on_failure: :keep}}) do
     requeue_message(message)
   end
+
+  defp drop_or_requeue_message(
+      %Message{} = message,
+      %{opts: %{on_failure: callback}}) when is_function(callback, 1) do
+      case callback.(message) do
+        :drop ->
+          drop_message(message)
+        :keep ->
+          requeue_message(message)
+        error ->
+          Logger.error("#{__MODULE__} expected on_failure function to return [:drop, :keep]. got #{inspect error}")
+          requeue_message(message)
+      end
+      drop_message(message)
+  end
+
+  defp drop_or_requeue_message(%Message{} = message, _state) do
+    Logger.error("#{__MODULE__} expected [:drop, :keep, function/1] in on_failure")
+    drop_message(message)
+  end
+
 
   defp ack_message(%Message{metadata: metadata}) do
     AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
