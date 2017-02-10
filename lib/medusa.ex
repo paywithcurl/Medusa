@@ -72,7 +72,6 @@ defmodule Medusa do
       metadata
       |> map_key_to_string
       |> Map.merge(%{"id" => UUID.uuid4}, fn _k, v1, _v2 -> v1 end)
-      |> Map.put("event", event)
     message = %Message{topic: event, body: payload, metadata: metadata}
     opts
     |> Keyword.get(:message_validators, [])

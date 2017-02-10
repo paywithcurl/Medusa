@@ -147,8 +147,14 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "matched event should received message" do
       body = "foobar"
       publish_test_message("rabbit.basic1", body, %{"extra" => "good"})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.basic1", "extra" => "good"}}, 1_000
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.basic1", "extra" => "good"}}, 1_000
+      assert_receive %Message{
+        body: ^body,
+        topic: "rabbit.basic1",
+        metadata: %{"extra" => "good"}}, 1_000
+      assert_receive %Message{
+        body: ^body,
+        topic: "rabbit.basic1",
+        metadata: %{"extra" => "good"}}, 1_000
     end
 
     test "non-matched event should not received message" do
@@ -166,7 +172,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert consumers |> Map.keys() |> length == 1
       ref = Process.monitor(producer)
       publish_test_message("rabbit.bind1", "die both")
-      assert_receive %Message{body: "die both", metadata: %{"event" => "rabbit.bind1"}}, 1_000
+      assert_receive %Message{body: "die both", topic: "rabbit.bind1"}, 1_000
       assert_receive {:DOWN, ^ref, :process, _, :normal}, 1_000
       refute Process.whereis(:"test-rabbitmq.rabbit_bind_test_1")
     end
@@ -178,8 +184,8 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert consumers |> Map.keys() |> length == 2
       publish_test_message("rabbit.bind2", "die 1 consumer")
       publish_test_message("rabbit.bind2", "die 1 consumer")
-      assert_receive %Message{body: "die 1 consumer", metadata: %{"event" => "rabbit.bind2"}}, 1_000
-      assert_receive %Message{body: "die 1 consumer", metadata: %{"event" => "rabbit.bind2"}}, 1_000
+      assert_receive %Message{body: "die 1 consumer", topic: "rabbit.bind2"}, 1_000
+      assert_receive %Message{body: "die 1 consumer", topic: "rabbit.bind2"}, 1_000
       Process.sleep(100)
       consumers = :sys.get_state(producer).consumers
       assert consumers |> Map.keys() |> length == 1
@@ -237,8 +243,8 @@ defmodule Medusa.Adapter.RabbitMQTest do
       assert publish_test_message("rabbit.republish", "bar") ==
         {:error, "cannot connect rabbitmq"}
       send(adapter, {:DOWN, make_ref(), :process, self(), :test})
-      assert_receive %Message{body: "foo", metadata: %{"event" => "rabbit.republish"}}, 1_000
-      assert_receive %Message{body: "bar", metadata: %{"event" => "rabbit.republish"}}, 1_000
+      assert_receive %Message{body: "foo", topic: "rabbit.republish"}, 1_000
+      assert_receive %Message{body: "bar", topic: "rabbit.republish"}, 1_000
     end
   end
 
@@ -246,25 +252,25 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "{:error, reason}" do
       body = random_string()
       publish_test_message("rabbit.retry1", body, %{"times" => 1})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry1"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry1"}, 1_000
     end
 
     test "raise" do
       body = random_string()
       publish_test_message("rabbit.retry2", body, %{"times" => 2, raise: true})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry2"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry2"}, 1_000
     end
 
     test "throw" do
       body = random_string()
       publish_test_message("rabbit.retry3", body, %{"times" => 1, throw: true})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry3"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry3"}, 1_000
     end
 
     test "exit" do
       body = random_string()
       publish_test_message("rabbit.retry4", body, %{"times" => 1, http_error: true})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry4"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry4"}, 1_000
     end
   end
 
@@ -272,31 +278,31 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "setting on_failure to :drop should drop" do
       body = random_string()
       publish_test_message("rabbit.retry.failed1", body, %{"times" => 2, "agent" => false})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry.failed1"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.retry.failed1"}, 1_000
     end
 
     test "setting on_failure to :keep should requeue" do
       body = random_string()
       publish_test_message("rabbit.retry.requeue1", body, %{"times" => 2})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry.requeue1"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry.requeue1"}, 1_000
     end
 
     test "setting on_failure to function/1 which return :drop should drop" do
       body = random_string()
       publish_test_message("rabbit.retry.failed2", body, %{"times" => 2, "agent" => false})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry.failed2"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.retry.failed2"}, 1_000
     end
 
     test "setting on_failure to function/1 which return :keep should requeue" do
       body = random_string()
       publish_test_message("rabbit.retry.requeue2", body, %{"times" => 2})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry.requeue2"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry.requeue2"}, 1_000
     end
 
     test "setting on failure to function/1 which return others should logged and requeue" do
       body = random_string()
       publish_test_message("rabbit.retry.requeue3", body, %{"times" => 2})
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.retry.requeue3"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.retry.requeue3"}, 1_000
     end
   end
 
@@ -304,7 +310,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "not return :ok, :error, {:error, reason} will drop message immediately" do
       body = random_string()
       publish_test_message("rabbit.wrong1", body, %{"times" => 1, "agent" => false, bad_return: true})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.wrong1"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.wrong1"}, 1_000
     end
   end
 
@@ -313,7 +319,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       body = random_string()
       publish_test_message("rabbit.multi1", body)
       expected_body = String.reverse(body)
-      assert_receive %Message{body: ^expected_body, metadata: %{"event" => "rabbit.multi1"}}, 1_000
+      assert_receive %Message{body: ^expected_body, topic: "rabbit.multi1"}, 1_000
     end
   end
 
@@ -321,7 +327,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "not return %Message{} with on_failure to :drop should drop immediately" do
       body = random_string()
       publish_test_message("rabbit.multi.failed1", body, %{"agent" => false})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed1"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.multi.failed1"}, 1_000
     end
 
     # DON'T KNOW HOW TO TEST IT
@@ -333,26 +339,26 @@ defmodule Medusa.Adapter.RabbitMQTest do
     test "not return :ok, :error or {:error, reason} should drop it immediately" do
       body = random_string()
       publish_test_message("rabbit.multi.failed3", body, %{"agent" => false})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed3"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.multi.failed3"}, 1_000
     end
 
     test ":error with on_failure to :drop should drop immediately" do
       body = random_string()
       publish_test_message("rabbit.multi.failed4", body, %{"agent" => false})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed4"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.multi.failed4"}, 1_000
     end
 
     test ":error with on_failure to :keep should requeue" do
       body = random_string()
       expected_body = String.reverse(body)
       publish_test_message("rabbit.multi.requeue2", body, %{"times" => 2})
-      assert_receive %Message{body: ^expected_body, metadata: %{"event" => "rabbit.multi.requeue2"}}, 1_000
+      assert_receive %Message{body: ^expected_body, topic: "rabbit.multi.requeue2"}, 1_000
     end
 
     test ":error with on_failure to :drop should drop immediately after reach max retries" do
       body = random_string()
       publish_test_message("rabbit.multi.failed6", body, %{"times" => 100, "agent" => false})
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.multi.failed6"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.multi.failed6"}, 1_000
     end
   end
 
@@ -361,53 +367,53 @@ defmodule Medusa.Adapter.RabbitMQTest do
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       publish_test_message("rabbit.validator1", body)
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator1"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.validator1"}, 1_000
     end
 
     test "Only global validator and {:error, reason}" do
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_error/1)
       publish_test_message("rabbit.validator2", body)
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator2"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.validator2"}, 1_000
     end
 
     test "With 1 extra validator and both: ok" do
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       publish_test_message("rabbit.validator3", body)
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator3"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.validator3"}, 1_000
     end
 
     test "With only extra validator and :ok" do
       body = random_string()
       publish_test_message("rabbit.validator4", body)
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator4"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.validator4"}, 1_000
     end
 
     test "With list of extra validators and all :ok" do
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       publish_test_message("rabbit.validator5", body)
-      assert_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator5"}}, 1_000
+      assert_receive %Message{body: ^body, topic: "rabbit.validator5"}, 1_000
     end
 
     test "With error extra validator in the middle" do
       body = random_string()
       publish_test_message("rabbit.validator6", body)
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator6"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.validator6"}, 1_000
     end
 
     test "With error extra validator in the end" do
       body = random_string()
       publish_test_message("rabbit.validator7", body)
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator7"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.validator7"}, 1_000
     end
 
     test "With error extra validator in the global" do
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_error/1)
       publish_test_message("rabbit.validator8", body)
-      refute_receive %Message{body: ^body, metadata: %{"event" => "rabbit.validator8"}}, 1_000
+      refute_receive %Message{body: ^body, topic: "rabbit.validator8"}, 1_000
     end
   end
 

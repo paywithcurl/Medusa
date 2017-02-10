@@ -16,16 +16,25 @@ defmodule Medusa.Adapter.PG2Test do
       consume("foo.baz", &forward_message_to_test/1)
       Process.sleep(100)
       publish_test_message("foo.bar", "foobar", %{"optional_field" => "nice_to_have"})
-      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have", "event" => "foo.bar"}}
-      assert_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have", "event" => "foo.bar"}}
-      refute_receive %Message{body: "foobar", metadata: %{"optional_field" => "nice_to_have", "event" => "foo.bar"}}
+      assert_receive %Message{
+        body: "foobar",
+        metadata: %{"optional_field" => "nice_to_have"},
+        topic: "foo.bar"}
+      assert_receive %Message{
+        body: "foobar",
+        metadata: %{"optional_field" => "nice_to_have"},
+        topic: "foo.bar"}
+      refute_receive %Message{
+        body: "foobar",
+        metadata: %{"optional_field" => "nice_to_have"},
+        topic: "foo.bar"}
     end
 
     test "Send non-match events" do
       consume("ping.pong", &forward_message_to_test/1)
       Process.sleep(100)
       publish_test_message("ping", "ping")
-      refute_receive %Message{body: "ping", metadata: %{"event" => "ping.pong"}}
+      refute_receive %Message{body: "ping", topic: "ping.pong"}
     end
 
     test "Send event to consumer with bind_once: true.
@@ -41,7 +50,7 @@ defmodule Medusa.Adapter.PG2Test do
       assert Process.alive?(consumer)
       assert Process.alive?(producer)
       publish_test_message("local.bind1", "die both")
-      assert_receive %Message{body: "die both", metadata: %{"event" => "local.bind1"}}
+      assert_receive %Message{body: "die both", topic: "local.bind1"}
       assert_receive {:DOWN, ^ref_consumer, :process, _, :normal}, 500
       assert_receive {:DOWN, ^ref_producer, :process, _, :normal}, 500
     end
@@ -56,8 +65,8 @@ defmodule Medusa.Adapter.PG2Test do
       assert length(producer_children()) == 1
       Process.sleep(100)
       publish_test_message("local.bind2", "only con2 die")
-      assert_receive %Message{body: "only con2 die", metadata: %{"event" => "local.bind2"}}
-      assert_receive %Message{body: "only con2 die", metadata: %{"event" => "local.bind2"}}
+      assert_receive %Message{body: "only con2 die", topic: "local.bind2"}
+      assert_receive %Message{body: "only con2 die", topic: "local.bind2"}
       Process.sleep(100)
       assert length(consumer_children()) == 1
       assert length(producer_children()) == 1
@@ -73,8 +82,8 @@ defmodule Medusa.Adapter.PG2Test do
       assert length(producer_children()) == 1
       Process.sleep(100)
       publish_test_message("local.bind3", "only con1 die")
-      assert_receive %Message{body: "only con1 die", metadata: %{"event" => "local.bind3"}}
-      assert_receive %Message{body: "only con1 die", metadata: %{"event" => "local.bind3"}}
+      assert_receive %Message{body: "only con1 die", topic: "local.bind3"}
+      assert_receive %Message{body: "only con1 die", topic: "local.bind3"}
       Process.sleep(100)
       assert length(consumer_children()) == 1
       assert length(producer_children()) == 1
@@ -94,9 +103,18 @@ defmodule Medusa.Adapter.PG2Test do
       consume("pg.*", &forward_message_to_test/1)
       consume("pg.baz", &forward_message_to_test/1)
       :rpc.call(node1, Medusa, :publish, ["pg.bar", "pgbar", %{"optional_field" => "nice_to_have"}])
-      assert_receive %Message{body: "pgbar", metadata: %{"optional_field" => "nice_to_have"}}, 500
-      assert_receive %Message{body: "pgbar", metadata: %{"optional_field" => "nice_to_have"}}, 500
-      refute_receive %Message{body: "pgbar", metadata: %{"optional_field" => "nice_to_have"}}, 500
+      assert_receive %Message{
+      body: "pgbar",
+      metadata: %{"optional_field" => "nice_to_have"},
+      topic: "pg.bar"}, 500
+      assert_receive %Message{
+        body: "pgbar",
+        metadata: %{"optional_field" => "nice_to_have"},
+        topic: "pb.bar"}, 500
+      refute_receive %Message{
+        body: "pgbar",
+        metadata: %{"optional_field" => "nice_to_have"},
+        topic: "pg.bar"}, 500
     end
 
     @tag :pg2
