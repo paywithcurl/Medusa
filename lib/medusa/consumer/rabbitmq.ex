@@ -56,9 +56,9 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_handle_events(events, %{callback: f, opts: opts} = state) do
     Enum.each(events, fn event ->
-      metadata = event.metadata
-      with %AMQP.Channel{} <- metadata["channel"],
-           tag when is_number(tag) <- metadata["delivery_tag"],
+      message_info = event.metadata["message_info"]
+      with %AMQP.Channel{} <- message_info.channel,
+           tag when is_number(tag) <- message_info.delivery_tag,
            validators = opts.message_validators,
            :ok <- Medusa.validate_message(validators, event) do
         do_event(event, f, event, state)
@@ -71,10 +71,17 @@ defmodule Medusa.Consumer.RabbitMQ do
     respone_handle_events(state)
   end
 
+  defp scrub_message(%Message{metadata: metadata} = message) do
+    new_metadata = Map.delete(metadata, "message_info")
+    %{message | metadata: new_metadata}
+  end
+
   defp do_event(%Message{} = message, [callback], original_message, state) do
     try do
-      case callback.(message) do
-        :ok -> ack_message(original_message)
+      message_to_sent = scrub_message(message)
+      case callback.(message_to_sent) do
+        :ok ->
+          ack_message(original_message)
         :error ->
           Logger.error("Error processing message #{inspect callback}")
           retry_event(original_message, state)
@@ -101,8 +108,10 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [callback|tail], original_message, state) do
     try do
-      case callback.(message) do
-        new = %Message{} -> do_event(new, tail, original_message, state)
+      message_to_sent = scrub_message(message)
+      case callback.(message_to_sent) do
+        new = %Message{} ->
+          do_event(new, tail, original_message, state)
         error ->
           Logger.error("Error processing message #{inspect callback} #{inspect error}")
           drop_or_requeue_message(original_message, state)
@@ -121,15 +130,22 @@ defmodule Medusa.Consumer.RabbitMQ do
     end
   end
 
-  defp retry_event(%Message{} = message, %{opts: %{max_retries: max_retries}} = state) do
-    message = update_in(message.metadata["retry"], &((&1 || 0) + 1))
-    if message.metadata["retry"] <= max_retries do
-      base = Medusa.config |> Keyword.get(:retry_consume_pow_base, 2)
-      time = base |> :math.pow(message.metadata["retry"]) |> round |> :timer.seconds
-      Process.send_after(self(), {:retry, message}, time)
+  defp retry_event(
+      %Message{metadata: metadata} = message,
+      %State{opts: %{max_retries: max_retries}} = state) do
+    new_message = update_in(message.metadata["message_info"].retry, &(&1 + 1))
+    retried = new_message.metadata["message_info"].retry
+    if retried <= max_retries do
+      time =
+        Medusa.config()
+        |> Keyword.get(:retry_consume_pow_base, 2)
+        |> :math.pow(retried)
+        |> round()
+        |> :timer.seconds()
+      Process.send_after(self(), {:retry, new_message}, time)
     else
-      Logger.warn("Failed processing message #{inspect message}")
-      drop_or_requeue_message(message, state)
+      Logger.warn("Failed processing message #{inspect new_message}")
+      drop_or_requeue_message(new_message, state)
     end
   end
 
@@ -174,22 +190,27 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
 
-  defp ack_message(%Message{metadata: metadata}) do
-    AMQP.Basic.ack(metadata["channel"], metadata["delivery_tag"])
+  defp ack_message(
+      %Message{metadata: %{
+        "message_info" => %{
+          channel: channel, delivery_tag: delivery_tag}}}) do
+    AMQP.Basic.ack(channel, delivery_tag)
   end
 
-  defp requeue_message(%Message{metadata: metadata} = message) do
+  defp requeue_message(
+      %Message{metadata: %{
+        "message_info" => %{
+          channel: channel, delivery_tag: delivery_tag}}} = message) do
     Logger.warn("Requeueing message #{inspect message}")
-    AMQP.Basic.nack(metadata["channel"],
-                    metadata["delivery_tag"],
-                    requeue: true)
+    AMQP.Basic.nack(channel, delivery_tag, requeue: true)
   end
 
-  defp drop_message(%Message{metadata: metadata} = message) do
+  defp drop_message(
+      %Message{metadata: %{
+        "message_info" => %{
+          channel: channel, delivery_tag: delivery_tag}}} = message) do
     Logger.warn("Dropping message #{inspect message}")
-    AMQP.Basic.nack(metadata["channel"],
-                    metadata["delivery_tag"],
-                    requeue: false)
+    AMQP.Basic.nack(channel, delivery_tag, requeue: false)
   end
 
   defp find_producer_pid_from_opts(opts) do

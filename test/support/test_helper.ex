@@ -56,7 +56,17 @@ defmodule Medusa.TestHelper do
   end
 
   def publish_test_message(event, body, metadata \\ %{}) do
-    new_metadata = Map.put(metadata, "from", :erlang.pid_to_list(self()))
+    agent? = Map.get(metadata, "agent", true)
+    times = metadata["times"] || 1
+    {:ok, agent} = Agent.start_link(fn -> times end)
+    map_to_merge =
+      if agent? do
+        %{"from" => :erlang.pid_to_list(self()),
+          "agent" => :erlang.pid_to_list(agent)}
+      else
+        %{"from" => :erlang.pid_to_list(self())}
+      end
+    new_metadata = Map.merge(metadata, map_to_merge)
     Medusa.publish(event, body, new_metadata)
   end
 
@@ -77,25 +87,23 @@ defmodule Medusa.TestHelper do
     :ok
   end
 
-  def message_to_test(%{metadata: %{
-                          "times" => times,
-                          "from" => from} = metadata} = message) do
-    retry = metadata["retry"] || 0
+  def message_to_test(%{metadata: %{"times" => times} = metadata} = message) do
+    agent_retry_left =
+      case is_list(metadata["agent"]) do
+        true ->
+          Agent.get_and_update(:erlang.list_to_pid(metadata["agent"]),
+                               &({&1, &1 - 1}))
+        false ->
+          nil
+      end
     cond do
-      metadata["bad_return"] ->
-        :bad_return
-      retry == times && metadata["middleware"] ->
-        message
-      retry == times ->
-        forward_message_to_test(message)
-      metadata["raise"] ->
-        raise "Boom!"
-      metadata["throw"] ->
-        throw "Bamm!"
-      metadata["http_error"] ->
-        :gen_tcp.connect('bogus url', 80, [])
-      true ->
-        {:error, retry}
+      agent_retry_left == 0 -> forward_message_to_test(message)
+      agent_retry_left == 0 && metadata["middleware"] -> message
+      metadata["bad_return"] -> :bad_return
+      metadata["raise"] -> raise "Boom!"
+      metadata["throw"] -> throw "Bamm!"
+      metadata["http_error"] -> :gen_tcp.connect('bogus url', 80, [])
+      true -> {:error, agent_retry_left}
     end
   end
 
