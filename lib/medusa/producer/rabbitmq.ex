@@ -6,14 +6,16 @@ defmodule Medusa.Producer.RabbitMQ do
   alias Medusa.Message
   alias Medusa.Adapter.RabbitMQ, as: Adapter
 
-  defstruct [
-    demand: 0,
-    channel: nil,
-    consumer_tag: nil,
-    consumers: MapSet.new(),
-    topic: nil,
-    queue_name: nil
-  ]
+  defmodule State do
+    defstruct [
+      demand: 0,
+      channel: nil,
+      consumer_tag: nil,
+      consumers: MapSet.new(),
+      topic: nil,
+      queue_name: nil
+    ]
+  end
 
   def start_link(opts) do
     topic = Keyword.fetch!(opts, :name)
@@ -25,7 +27,7 @@ defmodule Medusa.Producer.RabbitMQ do
 
   def init({topic, queue_name}) do
     Logger.debug("Starting Producer #{__MODULE__} for: #{topic}")
-    state = %__MODULE__{topic: topic, queue_name: queue_name}
+    state = %State{topic: topic, queue_name: queue_name}
     {:producer, state, dispatcher: GenStage.DemandDispatcher}
   end
 
@@ -75,11 +77,9 @@ defmodule Medusa.Producer.RabbitMQ do
         message = %Message{topic: msg["topic"],
                            body: msg["body"],
                            metadata: msg["metadata"]}
-        info = %{"channel" => state.channel, "delivery_tag" => tag}
-        message = Map.update(message,
-                             :metadata,
-                             info,
-                             &Map.merge(&1, info))
+        message_info = %Message.Info{channel: state.channel, delivery_tag: tag}
+        new_metadata = Map.put(message.metadata, "message_info", message_info)
+        message = %{message | metadata: new_metadata}
         {:noreply, [message], %{state | demand: state.demand - 1}}
       _ ->
         AMQP.Basic.reject(state.channel, tag, requeue: false)
@@ -109,17 +109,17 @@ defmodule Medusa.Producer.RabbitMQ do
     """)
   end
 
-  defp get_next_event(%__MODULE__{channel: nil} = state) do
+  defp get_next_event(%State{channel: nil} = state) do
     channel = setup_channel(state.channel, state.topic, state.queue_name)
     get_next_event(%{state | channel: channel})
   end
 
-  defp get_next_event(%__MODULE__{demand: demand} = state) when demand > 0 do
+  defp get_next_event(%State{demand: demand} = state) when demand > 0 do
     tag = state.consumer_tag || consume(state.channel, state.queue_name)
     {:noreply, [], %{state | consumer_tag: tag}}
   end
 
-  defp get_next_event(%__MODULE__{} = state) do
+  defp get_next_event(%State{} = state) do
     state.consumer_tag && AMQP.Basic.cancel(state.channel, state.consumer_tag)
     {:noreply, [], %{state | consumer_tag: nil}}
   end
