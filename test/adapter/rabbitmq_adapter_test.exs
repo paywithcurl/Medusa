@@ -6,145 +6,24 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   setup_all do
     put_rabbitmq_adapter_config()
-    :ok = Medusa.consume("rabbit.basic1",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_basic_test_1")
-    :ok = Medusa.consume("*.basic1",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_basic_test_*")
-    :ok = Medusa.consume("rabbit.bind1",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_bind_test_1",
-                         bind_once: true)
-    :ok = Medusa.consume("rabbit.bind2",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_bind_test_2")
-    :ok = Medusa.consume("rabbit.bind2",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_bind_test_2",
-                         bind_once: true)
-    :ok = Medusa.consume("rabbit.republish",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_republish_test")
-    :ok = Medusa.consume("rabbit.retry1",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_test_1",
-                         max_retries: 1)
-    :ok = Medusa.consume("rabbit.retry2",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_test_2",
-                         max_retries: 5)
-    :ok = Medusa.consume("rabbit.retry3",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_test_3",
-                         max_retries: 2)
-    :ok = Medusa.consume("rabbit.retry4",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_test_4",
-                         max_retries: 2)
-    :ok = Medusa.consume("rabbit.retry.failed1",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_failed_test_1",
-                         max_retries: 1,
-                         on_failure: :drop)
-    :ok = Medusa.consume("rabbit.retry.failed2",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_failed_test_2",
-                         max_retries: 1,
-                         on_failure: &always_drop/1)
-    :ok = Medusa.consume("rabbit.retry.failed3",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_failed_test_3",
-                         max_retries: 1,
-                         on_failure: &always_ok/1)
-    :ok = Medusa.consume("rabbit.retry.requeue1",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_requeue_test_1",
-                         max_retries: 1,
-                         on_failure: :keep)
-    :ok = Medusa.consume("rabbit.retry.requeue2",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_requeue_test_2",
-                         max_retries: 1,
-                         on_failure: &always_keep/1)
-    :ok = Medusa.consume("rabbit.retry.requeue3",
-                         &message_to_test/1,
-                         queue_name: "rabbit_retry_requeue_test_3",
-                         max_retries: 1,
-                         on_failure: &always_ok/1)
-    :ok = Medusa.consume("rabbit.wrong1",
-                         &message_to_test/1,
-                         queue_name: "rabbit_wrong_test_1",
-                         max_retries: 1,
-                         on_failure: :keep)
-    :ok = Medusa.consume("rabbit.multi1",
-                         [&reverse_message/1, &forward_message_to_test/1],
-                         queue_name: "rabbit_multi_test_1")
-    :ok = Medusa.consume("rabbit.multi.requeue2",
-                         [&reverse_message/1, &message_to_test/1],
-                         queue_name: "rabbit_multi_requeue_test_2",
-                         on_failure: :keep)
-    :ok = Medusa.consume("rabbit.multi.failed1",
-                         [&error_message/1, &forward_message_to_test/1],
-                         queue_name: "rabbit_multi_failed_test_1",
-                         on_failure: :drop)
-    :ok = Medusa.consume("rabbit.multi.failed3",
-                         [&reverse_message/1, &reverse_message/1],
-                         queue_name: "rabbit_multi_failed_test_3",
-                         on_failure: :keep)
-    :ok = Medusa.consume("rabbit.multi.failed4",
-                         [&reverse_message/1, &error_message/1],
-                         queue_name: "rabbit_multi_failed_test_4",
-                         on_failure: :drop)
-    :ok = Medusa.consume("rabbit.multi.failed5",
-                         [&reverse_message/1, &message_to_test/1],
-                         queue_name: "rabbit_multi_failed_test_5",
-                         on_failure: :keep)
-    :ok = Medusa.consume("rabbit.multi.failed6",
-                         [&reverse_message/1, &message_to_test/1],
-                         queue_name: "rabbit_multi_failed_test_6",
-                         on_failure: :drop)
-    :ok = Medusa.consume("rabbit.validator1",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_1")
-    :ok = Medusa.consume("rabbit.validator2",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_2")
-    :ok = Medusa.consume("rabbit.validator3",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_3",
-                         message_validators: &always_ok/1)
-    :ok = Medusa.consume("rabbit.validator4",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_4",
-                         message_validators: &always_ok/1)
-    :ok = Medusa.consume("rabbit.validator5",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_5",
-                         message_validators: [&always_ok/1, &always_ok/1])
-    :ok = Medusa.consume("rabbit.validator6",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_6",
-                         message_validators: [&always_error/1, &always_ok/1])
-    :ok = Medusa.consume("rabbit.validator7",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_7",
-                         message_validators: [&always_ok/1, &always_error/1])
-    :ok = Medusa.consume("rabbit.validator8",
-                         &forward_message_to_test/1,
-                         queue_name: "rabbit_validator_test_8",
-                         message_validators: [&always_ok/1, &always_ok/1])
-    Process.sleep(1_000)
     :ok
   end
 
   setup do
     MedusaConfig.set_message_validator(:medusa_config, nil)
+    delete_all_queues()
     :ok
   end
 
   describe "send messages" do
     test "matched event should received message" do
+      :ok = Medusa.consume("rabbit.basic1",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_basic_test_1")
+      :ok = Medusa.consume("*.basic1",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_basic_test_*")
+      Process.sleep(1_000)
       body = "foobar"
       publish_test_message("rabbit.basic1", body, %{"extra" => "good"})
       assert_receive %Message{
@@ -166,6 +45,11 @@ defmodule Medusa.Adapter.RabbitMQTest do
   describe "bind_once" do
     test "Send event to consumer with bind_once: true.
           consumer and producer should die" do
+      :ok = Medusa.consume("rabbit.bind1",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_bind_test_1",
+                           bind_once: true)
+      Process.sleep(1_000)
       producer = Process.whereis(:"test-rabbitmq.rabbit_bind_test_1")
       assert producer
       consumers = :sys.get_state(producer).consumers
@@ -178,6 +62,14 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test "Send event to consumer with bind_once: true should not kill other producer-consumer" do
+      :ok = Medusa.consume("rabbit.bind2",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_bind_test_2")
+      :ok = Medusa.consume("rabbit.bind2",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_bind_test_2",
+                           bind_once: true)
+      Process.sleep(1_000)
       producer = Process.whereis(:"test-rabbitmq.rabbit_bind_test_2")
       assert producer
       consumers = :sys.get_state(producer).consumers
@@ -235,6 +127,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "re-publish" do
     test "publish when no connection is queue and resend when re-connected" do
+      :ok = Medusa.consume("rabbit.republish",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_republish_test")
+      Process.sleep(1_000)
       adapter = Process.whereis(RabbitMQ)
       path = [ Access.key!(:mod_state), Access.key!(:channel) ]
       :sys.replace_state(adapter, &put_in(&1, path, nil))
@@ -250,24 +146,44 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "Retry on failure" do
     test "{:error, reason}" do
+      :ok = Medusa.consume("rabbit.retry1",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_test_1",
+                           max_retries: 1)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry1", body, %{"times" => 1})
       assert_receive %Message{body: ^body, topic: "rabbit.retry1"}, 1_000
     end
 
     test "raise" do
+      :ok = Medusa.consume("rabbit.retry2",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_test_2",
+                           max_retries: 5)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry2", body, %{"times" => 2, raise: true})
       assert_receive %Message{body: ^body, topic: "rabbit.retry2"}, 1_000
     end
 
     test "throw" do
+      :ok = Medusa.consume("rabbit.retry3",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_test_3",
+                           max_retries: 2)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry3", body, %{"times" => 1, throw: true})
       assert_receive %Message{body: ^body, topic: "rabbit.retry3"}, 1_000
     end
 
     test "exit" do
+      :ok = Medusa.consume("rabbit.retry4",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_test_4",
+                           max_retries: 2)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry4", body, %{"times" => 1, http_error: true})
       assert_receive %Message{body: ^body, topic: "rabbit.retry4"}, 1_000
@@ -276,30 +192,60 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "When retry reach max_retries" do
     test "setting on_failure to :drop should drop" do
+      :ok = Medusa.consume("rabbit.retry.failed1",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_failed_test_1",
+                           max_retries: 1,
+                           on_failure: :drop)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry.failed1", body, %{"times" => 2, "agent" => false})
       refute_receive %Message{body: ^body, topic: "rabbit.retry.failed1"}, 1_000
     end
 
     test "setting on_failure to :keep should requeue" do
+      :ok = Medusa.consume("rabbit.retry.requeue1",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_requeue_test_1",
+                           max_retries: 1,
+                           on_failure: :keep)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry.requeue1", body, %{"times" => 2})
       assert_receive %Message{body: ^body, topic: "rabbit.retry.requeue1"}, 1_000
     end
 
     test "setting on_failure to function/1 which return :drop should drop" do
+      :ok = Medusa.consume("rabbit.retry.failed2",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_failed_test_2",
+                           max_retries: 1,
+                           on_failure: &always_drop/1)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry.failed2", body, %{"times" => 2, "agent" => false})
       refute_receive %Message{body: ^body, topic: "rabbit.retry.failed2"}, 1_000
     end
 
     test "setting on_failure to function/1 which return :keep should requeue" do
+      :ok = Medusa.consume("rabbit.retry.requeue2",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_requeue_test_2",
+                           max_retries: 1,
+                           on_failure: &always_keep/1)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry.requeue2", body, %{"times" => 2})
       assert_receive %Message{body: ^body, topic: "rabbit.retry.requeue2"}, 1_000
     end
 
     test "setting on failure to function/1 which return others should logged and requeue" do
+      :ok = Medusa.consume("rabbit.retry.requeue3",
+                           &message_to_test/1,
+                           queue_name: "rabbit_retry_requeue_test_3",
+                           max_retries: 1,
+                           on_failure: &always_ok/1)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.retry.requeue3", body, %{"times" => 2})
       assert_receive %Message{body: ^body, topic: "rabbit.retry.requeue3"}, 1_000
@@ -308,6 +254,12 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "Wrong return value" do
     test "not return :ok, :error, {:error, reason} will drop message immediately" do
+      :ok = Medusa.consume("rabbit.wrong1",
+                           &message_to_test/1,
+                           queue_name: "rabbit_wrong_test_1",
+                           max_retries: 1,
+                           on_failure: :keep)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.wrong1", body, %{"times" => 1, "agent" => false, bad_return: true})
       refute_receive %Message{body: ^body, topic: "rabbit.wrong1"}, 1_000
@@ -316,6 +268,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "Multi functions in consume Success" do
     test "do it in sequence" do
+      :ok = Medusa.consume("rabbit.multi1",
+                           [&reverse_message/1, &forward_message_to_test/1],
+                           queue_name: "rabbit_multi_test_1")
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.multi1", body)
       expected_body = String.reverse(body)
@@ -325,6 +281,11 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "Multi functions in consume wrong failure in the middle" do
     test "not return %Message{} with on_failure to :drop should drop immediately" do
+      :ok = Medusa.consume("rabbit.multi.failed1",
+                           [&error_message/1, &forward_message_to_test/1],
+                           queue_name: "rabbit_multi_failed_test_1",
+                           on_failure: :drop)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.multi.failed1", body, %{"agent" => false})
       refute_receive %Message{body: ^body, topic: "rabbit.multi.failed1"}, 1_000
@@ -337,18 +298,33 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "Multi functions in consume failure in last function" do
     test "not return :ok, :error or {:error, reason} should drop it immediately" do
+      :ok = Medusa.consume("rabbit.multi.failed3",
+                           [&reverse_message/1, &reverse_message/1],
+                           queue_name: "rabbit_multi_failed_test_3",
+                           on_failure: :keep)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.multi.failed3", body, %{"agent" => false})
       refute_receive %Message{body: ^body, topic: "rabbit.multi.failed3"}, 1_000
     end
 
     test ":error with on_failure to :drop should drop immediately" do
+      :ok = Medusa.consume("rabbit.multi.failed4",
+                           [&reverse_message/1, &error_message/1],
+                           queue_name: "rabbit_multi_failed_test_4",
+                           on_failure: :drop)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.multi.failed4", body, %{"agent" => false})
       refute_receive %Message{body: ^body, topic: "rabbit.multi.failed4"}, 1_000
     end
 
     test ":error with on_failure to :keep should requeue" do
+      :ok = Medusa.consume("rabbit.multi.requeue2",
+                           [&reverse_message/1, &message_to_test/1],
+                           queue_name: "rabbit_multi_requeue_test_2",
+                           on_failure: :keep)
+      Process.sleep(1_000)
       body = random_string()
       expected_body = String.reverse(body)
       publish_test_message("rabbit.multi.requeue2", body, %{"times" => 2})
@@ -356,6 +332,11 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test ":error with on_failure to :drop should drop immediately after reach max retries" do
+      :ok = Medusa.consume("rabbit.multi.failed6",
+                           [&reverse_message/1, &message_to_test/1],
+                           queue_name: "rabbit_multi_failed_test_6",
+                           on_failure: :drop)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.multi.failed6", body, %{"times" => 100, "agent" => false})
       refute_receive %Message{body: ^body, topic: "rabbit.multi.failed6"}, 1_000
@@ -364,6 +345,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   describe "Validators" do
     test "Only global validator and :ok" do
+      :ok = Medusa.consume("rabbit.validator1",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_1")
+      Process.sleep(1_000)
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       publish_test_message("rabbit.validator1", body)
@@ -371,6 +356,10 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test "Only global validator and {:error, reason}" do
+      :ok = Medusa.consume("rabbit.validator2",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_2")
+      Process.sleep(1_000)
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_error/1)
       publish_test_message("rabbit.validator2", body)
@@ -378,6 +367,11 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test "With 1 extra validator and both: ok" do
+      :ok = Medusa.consume("rabbit.validator3",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_3",
+                           message_validators: &always_ok/1)
+      Process.sleep(1_000)
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       publish_test_message("rabbit.validator3", body)
@@ -385,12 +379,22 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test "With only extra validator and :ok" do
+      :ok = Medusa.consume("rabbit.validator4",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_4",
+                           message_validators: &always_ok/1)
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.validator4", body)
       assert_receive %Message{body: ^body, topic: "rabbit.validator4"}, 1_000
     end
 
     test "With list of extra validators and all :ok" do
+      :ok = Medusa.consume("rabbit.validator5",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_5",
+                           message_validators: [&always_ok/1, &always_ok/1])
+      Process.sleep(1_000)
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_ok/1)
       publish_test_message("rabbit.validator5", body)
@@ -398,18 +402,33 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test "With error extra validator in the middle" do
+      :ok = Medusa.consume("rabbit.validator6",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_6",
+                           message_validators: [&always_error/1, &always_ok/1])
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.validator6", body)
       refute_receive %Message{body: ^body, topic: "rabbit.validator6"}, 1_000
     end
 
     test "With error extra validator in the end" do
+      :ok = Medusa.consume("rabbit.validator7",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_7",
+                           message_validators: [&always_ok/1, &always_error/1])
+      Process.sleep(1_000)
       body = random_string()
       publish_test_message("rabbit.validator7", body)
       refute_receive %Message{body: ^body, topic: "rabbit.validator7"}, 1_000
     end
 
     test "With error extra validator in the global" do
+      :ok = Medusa.consume("rabbit.validator8",
+                           &forward_message_to_test/1,
+                           queue_name: "rabbit_validator_test_8",
+                           message_validators: [&always_ok/1, &always_ok/1])
+      Process.sleep(1_000)
       body = random_string()
       MedusaConfig.set_message_validator(:medusa_config, &always_error/1)
       publish_test_message("rabbit.validator8", body)
