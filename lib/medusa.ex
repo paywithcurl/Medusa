@@ -53,13 +53,45 @@ defmodule Medusa do
   @doc """
   Adds a new route using the configured adapter.
   """
-  def consume(route, functions, opts \\ []) do
-    case validate_consume_function(functions) do
-      :ok ->
-        adapter().new_route(route, functions, opts)
-      {:error, reason} ->
-        Logger.warn("#{inspect reason}")
-        {:error, reason}
+  def consume(route, action, opts \\ [])
+  def consume(route, action, opts) when is_function(action, 1) do
+    callback = fn(message) ->
+      case action.(message) do
+        # TODO make this more specific {:ok, message} {:error, reason}
+        :ok ->
+          Logger.info("message consumed")
+          Logger.info(message |> Map.delete(:body) |> inspect)
+          Logger.debug(message.body |> inspect)
+          :ok
+        other ->
+          Logger.error("message not published #{other |> inspect}")
+          Logger.error(message |> inspect)
+          other
+      end
+    end
+    adapter().new_route(route, callback, opts)
+  end
+  def consume(route, functions, opts) when is_list(functions) do
+    case compose(functions) do
+      {:ok, function} ->
+        adapter().new_route(route, function, opts)
+      {:error, :invalid_function} ->
+        Logger.warn("consume must be function")
+        {:error, :invalid_function}
+    end
+  end
+
+  def compose([f]) do
+    {:ok, f}
+  end
+  def compose([a, b | rest]) do
+    if is_function(a, 1) and is_function(b, 1) do
+      f = fn(x) ->
+        b.(a.(x))
+      end
+      compose([f | rest])
+    else
+      {:error, :invalid_function}
     end
   end
 
@@ -78,7 +110,19 @@ defmodule Medusa do
     |> validate_message(message)
     |> case do
       :ok ->
-        adapter().publish(message)
+        case adapter().publish(message) do
+          :ok ->
+            Logger.info("message published")
+            Logger.info(message |> Map.delete(:body) |> inspect)
+            # Body should always come in the same format.
+            Logger.debug(message.body |> inspect)
+            :ok
+          other ->
+            Logger.error("message not published #{other |> inspect}")
+            Logger.error(message |> inspect)
+            other
+        end
+
       {:error, reason} ->
         Logger.warn "Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}"
         {:error, "message is invalid"}
@@ -145,25 +189,6 @@ defmodule Medusa do
         new_app_config = Keyword.merge(app_config, [adapter: @default_adapter])
         Application.put_env(:medusa, Medusa, new_app_config, persistent: true)
     end
-  end
-
-  defp validate_consume_function(function) when is_function(function) do
-    validate_consume_function([function])
-  end
-
-  defp validate_consume_function([]) do
-    :ok
-  end
-
-  defp validate_consume_function([function|tail]) when is_function(function) do
-    case :erlang.fun_info(function, :arity) do
-      {:arity, 1} -> validate_consume_function(tail)
-      _ -> {:error, "arity must be 1"}
-    end
-  end
-
-  defp validate_consume_function(_) do
-    {:error, "consume must be function"}
   end
 
   defp do_validate_message([], _message) do
