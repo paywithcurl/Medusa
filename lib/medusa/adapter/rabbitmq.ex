@@ -254,15 +254,21 @@ defmodule Medusa.Adapter.RabbitMQ do
                          topic,
                          message,
                          persistent: true)
+      info_message = Medusa.LogMessage.info(message)
+      Logger.info(info_message)
       {:ok, state}
     rescue
       _ ->
+        error_message = Medusa.LogMessage.error("cannot publish", message)
+        Logger.error(error_message)
         new_messages = :queue.in({topic, message, times + 1}, messages)
         {:error, %{state | messages: new_messages}}
     end
   end
 
   defp do_publish(topic, message, times, %{messages: messages} = state) do
+    error_message = Medusa.LogMessage.error("cannot connect rabbitmq", message)
+    Logger.error(error_message)
     new_messages = :queue.in({topic, message, times}, messages)
     {{:error, "cannot connect rabbitmq"}, %{state | messages: new_messages}}
   end
