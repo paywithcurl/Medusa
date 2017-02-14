@@ -2,7 +2,6 @@ alias Experimental.GenStage
 
 defmodule Medusa.Producer.RabbitMQ do
   use GenStage
-  require Logger
   alias Medusa.Message
   alias Medusa.Adapter.RabbitMQ, as: Adapter
 
@@ -26,13 +25,13 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def init({topic, queue_name}) do
-    Logger.debug("Starting Producer #{__MODULE__} for: #{topic}")
+    # Logger.debug("Starting Producer #{__MODULE__} for: #{topic}")
     state = %State{topic: topic, queue_name: queue_name}
     {:producer, state, dispatcher: GenStage.DemandDispatcher}
   end
 
   def handle_demand(demand, state) do
-    Logger.debug("#{__MODULE__} handle_demand: #{inspect demand}")
+    # Logger.debug("#{__MODULE__} handle_demand: #{inspect demand}")
     get_next_event(%{state | demand: demand})
   end
 
@@ -42,7 +41,7 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_cancel({:down, :normal}, from, %{consumers: consumers} = state) do
-    Logger.debug("#{__MODULE__} handle_cancel: normal")
+    # Logger.debug("#{__MODULE__} handle_cancel: normal")
     new_consumers = MapSet.delete(consumers, from)
     case MapSet.size(new_consumers) do
       0 -> {:stop, :normal, state}
@@ -50,24 +49,24 @@ defmodule Medusa.Producer.RabbitMQ do
     end
   end
 
-  def handle_cancel(reason, from, %{consumers: consumers} = state) do
-    Logger.debug("#{__MODULE__} handle_cancel: #{inspect reason}")
+  def handle_cancel(_reason, from, %{consumers: consumers} = state) do
+    # Logger.debug("#{__MODULE__} handle_cancel: #{inspect reason}")
     new_consumers = MapSet.delete(consumers, from)
     {:noreply, [], %{state | consumers: new_consumers}}
   end
 
-  def handle_info({:basic_consume_ok, meta}, state) do
-    Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
+  def handle_info({:basic_consume_ok, _meta}, state) do
+    # Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
     {:noreply, [], state}
   end
 
-  def handle_info({:basic_cancel, meta}, state) do
-    Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
+  def handle_info({:basic_cancel, _meta}, state) do
+    # Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
     {:noreply, [], state}
   end
 
-  def handle_info({:basic_cancel_ok, meta}, state) do
-    Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
+  def handle_info({:basic_cancel_ok, _meta}, state) do
+    # Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
     {:stop, :normal, state}
   end
 
@@ -95,18 +94,18 @@ defmodule Medusa.Producer.RabbitMQ do
     |> get_next_event
   end
 
-  def handle_info(msg, state) do
-    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
+  def handle_info(_msg, state) do
+    # Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
-  def terminate(reason, state) do
+  def terminate(_reason, state) do
     ensure_channel_closed(state.channel)
-    Logger.error("""
-      #{__MODULE__}
-      state: #{inspect state}
-      die: #{inspect reason}
-    """)
+    # Logger.error("""
+    #   #{__MODULE__}
+    #   state: #{inspect state}
+    #   die: #{inspect reason}
+    # """)
   end
 
   defp get_next_event(%State{channel: nil} = state) do
@@ -136,8 +135,8 @@ defmodule Medusa.Producer.RabbitMQ do
       Process.monitor(chan.pid)
       chan
     else
-      error ->
-        Logger.warn("#{__MODULE__} setup_channel #{inspect error}")
+      _error ->
+        # Logger.warn("#{__MODULE__} setup_channel #{inspect error}")
         Process.sleep(1_000)
         setup_channel(old_chan, topic, queue_name)
     end

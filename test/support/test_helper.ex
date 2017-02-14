@@ -107,7 +107,7 @@ defmodule Medusa.TestHelper do
     end
   end
 
-    def delete_all_queues() do
+  def delete_all_queues() do
     rabbit_conf = Application.get_env(:medusa, Medusa)[:"RabbitMQ"]
     admin_conf = rabbit_conf[:admin]
     conn_conf = rabbit_conf[:connection]
@@ -117,5 +117,11 @@ defmodule Medusa.TestHelper do
     %{body: body} = HTTPoison.get!(url, [], hackney: hackney)
     Poison.decode!(body)
     |> Enum.map(&HTTPoison.delete!("#{url}/#{&1["name"]}", [], hackney: hackney))
+  end
+
+  def decode_logger_message(message) do
+    message
+    |> String.replace(~r/\n?\e\[\d+\w+\n?/, "")
+    |> Poison.decode!
   end
 end

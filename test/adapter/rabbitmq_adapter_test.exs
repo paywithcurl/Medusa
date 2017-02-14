@@ -437,38 +437,50 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
   end
 
-  # describe "Logging" do
-  #   test "publish cannot connect rabbitmq" do
-  #     adapter = Process.whereis(RabbitMQ)
-  #     path = [ Access.key!(:mod_state), Access.key!(:channel) ]
-  #     :sys.replace_state(adapter, &put_in(&1, path, nil))
-  #     error_message = capture_log(fn ->
-  #       publish_test_message("rabbit.logging.publish1", "HELLO",
-  #                            %{"request_id" => "1", "origin" => "medusa"})
-  #     end)
-  #     assert error_message =~ "\"timestamp\""
-  #     assert error_message =~ "\"level\":\"error\""
-  #     assert error_message =~ "\"routing_key\":\"rabbit.logging.publish1\""
-  #     assert error_message =~ "\"reason\":\"cannot connect rabbitmq\""
-  #     assert error_message =~ "\"rabbitmq_host\":\"#{rabbitmq_connection()[:host]}\""
-  #     assert error_message =~ "\"rabbitmq_port\":#{rabbitmq_connection()[:port]}"
-  #     assert error_message =~ "\"request_id\":\"1\""
-  #     assert error_message =~ "\"origin\":\"medusa\""
-  #   end
-  #
-  #   test "publish success" do
-  #     info_message = capture_log(fn ->
-  #       publish_test_message("rabbit.logging.publish2", "HELLO", %{"request_id" => "2", "origin" => "medusa"})
-  #     end)
-  #     assert info_message =~ "\"level\":\"info\""
-  #     assert info_message =~ "\"routing_key\":\"rabbit.logging.publish2\""
-  #     assert info_message =~ "\"rabbitmq_host\":\"#{rabbitmq_connection()[:host]}\""
-  #     assert info_message =~ "\"rabbitmq_port\":#{rabbitmq_connection()[:port]}"
-  #     assert info_message =~ "\"body\":\"HELLO\""
-  #     assert info_message =~ "\"request_id\":\"2\""
-  #     assert info_message =~ "\"origin\":\"medusa\""
-  #   end
-  # end
+  # CAPTURE_LOG make test inconsistence
+  describe "Logging" do
+    @tag :skip
+    test "publish cannot connect rabbitmq" do
+      adapter = Process.whereis(RabbitMQ)
+      path = [ Access.key!(:mod_state), Access.key!(:channel) ]
+      :sys.replace_state(adapter, &put_in(&1, path, nil))
+      assert %{
+        "level" => "error",
+        "routing_key" => "rabbit.logging.publish1",
+        "timestamp" => _,
+        "message_id" => _,
+        "request_id" => "1",
+        "origin" => "medusa",
+        "rabbitmq_channel" => _,
+        "rabbitmq_exchange" => _,
+        "rabbitmq_host" => _,
+        "rabbitmq_port" => _,
+      } = capture_log(fn ->
+        publish_test_message("rabbit.logging.publish1", "HELLO",
+                             %{"request_id" => "1", "origin" => "medusa"})
+      end) |> decode_logger_message
+    end
+
+    @tag :skip
+    test "publish success" do
+      assert %{
+        "level" => "info",
+        "routing_key" => "rabbit.logging.publish2",
+        "timestamp" => _,
+        "message_id" => _,
+        "request_id" => "2",
+        "origin" => "medusa",
+        "body" => "HELLO",
+        "rabbitmq_channel" => _,
+        "rabbitmq_exchange" => _,
+        "rabbitmq_host" => _,
+        "rabbitmq_port" => _,
+      } = capture_log(fn ->
+        publish_test_message("rabbit.logging.publish2", "HELLO",
+                             %{"request_id" => "2", "origin" => "medusa"})
+      end) |> decode_logger_message
+    end
+  end
 
 
 
@@ -482,10 +494,6 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   defp random_string do
     32 |> :crypto.strong_rand_bytes |> Base.encode64
-  end
-
-  defp rabbitmq_connection do
-    Application.get_env(:medusa, Medusa)[:RabbitMQ][:connection]
   end
 
   defp invalid_config(host) do
