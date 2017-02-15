@@ -82,7 +82,8 @@ defmodule Medusa.Producer.RabbitMQ do
           delivery_tag: meta[:delivery_tag],
           routing_key: meta[:routing_key],
           consumer_tag: meta[:consumer_tag],
-          message_id: meta[:message_id]}
+          message_id: meta[:message_id],
+          exchange: meta[:exchange]}
         new_metadata = Map.put(message.metadata, "message_info", message_info)
         message = %{message | metadata: new_metadata}
         {:noreply, [message], %{state | demand: state.demand - 1}}

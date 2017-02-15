@@ -8,6 +8,7 @@ defmodule Medusa.Message do
       routing_key: nil,
       consumer_tag: nil,
       message_id: nil,
+      exchange: nil,
       retry: 0
     ]
   end

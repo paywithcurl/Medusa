@@ -42,13 +42,13 @@ defmodule Medusa.Logger do
       timestamp: DateTime.utc_now(),
       topic: topic,
       routing_key: message_info.routing_key,
-      message_id: message_info.message_id || metadata["id"] || "",
-      request_id: metadata["request_id"] || "",
-      origin: metadata["origin"] || "",
+      message_id: message_info.message_id || metadata["id"],
+      request_id: metadata["request_id"],
+      origin: metadata["origin"],
       rabbitmq_host: rabbit_conf[:host],
       rabbitmq_port: rabbit_conf[:port],
-      rabbitmq_exchange: "",
-      rabbitmq_channel: ""
+      rabbitmq_exchange: message_info.exchange,
+      rabbitmq_consumer_tag: message_info.consumer_tag
     }
   end
 
