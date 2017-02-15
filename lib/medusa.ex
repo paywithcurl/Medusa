@@ -73,7 +73,7 @@ defmodule Medusa do
     validators = Keyword.get(opts, :message_validators, [])
     case validate_message(validators, message) do
       :ok -> adapter().publish(message)
-      {:error, reason} -> {:error, "message is invalid"}
+      {:error, _reason} -> {:error, "message is invalid"}
     end
   end
 
@@ -151,8 +151,8 @@ defmodule Medusa do
   end
 
   defp validate_consume_function(_) do
-    Logger.error("consume must be function")
-    {:error, "consume must be function"}
+    Logger.error("consume must be function with arity 1")
+    {:error, "consume must be function with arity 1"}
   end
 
   defp do_validate_message([], _message) do
@@ -173,7 +173,7 @@ defmodule Medusa do
     end
   end
 
-  defp do_validate_message(o, %Message{} = message) do
+  defp do_validate_message(_, %Message{} = message) do
     Medusa.Logger.error(message, "validator is not a function")
     {:error, "validator is not a function"}
   end

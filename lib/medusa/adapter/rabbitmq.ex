@@ -249,10 +249,12 @@ defmodule Medusa.Adapter.RabbitMQ do
   defp do_publish(topic, message, times,
   %{channel: chan, messages: messages} = state) when not is_nil(chan) do
     try do
+      message_id = Poison.decode!(message)["metadata"]["id"]
       AMQP.Basic.publish(chan,
                          @exchange_name,
                          topic,
                          message,
+                         message_id: message_id,
                          persistent: true)
       Medusa.Logger.info(message)
       {:ok, state}

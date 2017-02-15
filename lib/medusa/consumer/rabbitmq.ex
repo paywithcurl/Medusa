@@ -82,9 +82,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       {timer, result} = :timer.tc(fn -> callback.(message_to_sent) end)
       case result do
         :ok ->
-          original_message
-          |> scrub_message
-          |> Medusa.Logger.info(processing_time: timer)
+          Medusa.Logger.info(original_message, processing_time: timer)
           ack_message(original_message)
         :error ->
           Medusa.Logger.error(message, "error processing message")

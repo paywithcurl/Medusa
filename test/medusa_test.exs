@@ -36,15 +36,15 @@ defmodule MedusaTest do
 
     test "Add invalid consumer" do
       result = Medusa.consume("foo.bob", fn -> IO.puts("blah") end)
-      assert result == {:error, "arity must be 1"}
+      assert result == {:error, "consume must be function with arity 1"}
     end
 
     test "Add invalid consumers" do
       assert capture_log(fn() ->
         functions = [&IO.inspect/1, :not_a_function]
         result = Medusa.consume("foo.bob", functions)
-        assert result == {:error, "consume must be function"}
-      end) =~ "consume must be function"
+        assert result == {:error, "consume must be function with arity 1"}
+      end) =~ "consume must be function with arity 1"
     end
 
     test "Add multiple consumers" do

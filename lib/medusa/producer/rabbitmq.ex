@@ -71,18 +71,23 @@ defmodule Medusa.Producer.RabbitMQ do
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_deliver, payload, %{delivery_tag: tag}}, state) do
+  def handle_info({:basic_deliver, payload, meta}, state) do
     case Poison.decode(payload) do
       {:ok, msg} ->
         message = %Message{topic: msg["topic"],
                            body: msg["body"],
                            metadata: msg["metadata"]}
-        message_info = %Message.Info{channel: state.channel, delivery_tag: tag}
+        message_info = %Message.Info{
+          channel: state.channel,
+          delivery_tag: meta[:delivery_tag],
+          routing_key: meta[:routing_key],
+          consumer_tag: meta[:consumer_tag],
+          message_id: meta[:message_id]}
         new_metadata = Map.put(message.metadata, "message_info", message_info)
         message = %{message | metadata: new_metadata}
         {:noreply, [message], %{state | demand: state.demand - 1}}
       _ ->
-        AMQP.Basic.reject(state.channel, tag, requeue: false)
+        AMQP.Basic.reject(state.channel, meta[:delivery_tag], requeue: false)
         {:noreply, [], state}
     end
   end

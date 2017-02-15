@@ -36,11 +36,13 @@ defmodule Medusa.Logger do
   end
 
   defp base_message(%{metadata: metadata, topic: topic}) do
+    message_info = metadata["message_info"] || %Medusa.Message.Info{}
     rabbit_conf = Application.get_env(:medusa, Medusa)[:RabbitMQ][:connection]
     %{
       timestamp: DateTime.utc_now(),
-      routing_key: topic,
-      message_id: metadata["id"] || "",
+      topic: topic,
+      routing_key: message_info.routing_key,
+      message_id: message_info.message_id || metadata["id"] || "",
       request_id: metadata["request_id"] || "",
       origin: metadata["origin"] || "",
       rabbitmq_host: rabbit_conf[:host],
