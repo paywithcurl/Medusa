@@ -39,8 +39,6 @@ defmodule MedusaTest do
       assert result == {:error, "arity must be 1"}
     end
 
-    # FIXME
-    @tag :skip
     test "Add invalid consumers" do
       assert capture_log(fn() ->
         functions = [&IO.inspect/1, :not_a_function]
