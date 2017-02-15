@@ -121,7 +121,8 @@ defmodule Medusa.TestHelper do
 
   def decode_logger_message(message) do
     message
-    |> String.replace(~r/\n?\e\[\d+\w+\n?/, "")
-    |> Poison.decode!
+    |> String.split("\n")
+    |> Enum.reject(&String.starts_with?(&1, "\e"))
+    |> Enum.map(&Poison.decode!/1)
   end
 end
