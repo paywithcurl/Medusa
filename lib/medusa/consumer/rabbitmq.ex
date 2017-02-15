@@ -2,6 +2,7 @@ alias Experimental.GenStage
 
 defmodule Medusa.Consumer.RabbitMQ do
   use GenStage
+  require Logger
   alias Medusa.Message
 
   defmodule State do
@@ -19,7 +20,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       producer: find_producer_pid_from_opts(opts),
       opts: Keyword.get(opts, :opts, []) |> add_default_options()
     }
-    # Logger.debug("Starting #{__MODULE__} for: #{inspect state}")
+    Logger.debug("Starting #{__MODULE__} for: #{inspect state}")
     {:consumer, state, subscribe_to: [producer]}
   end
 
@@ -27,7 +28,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   Process the event passing the argument to the function.
   """
   def handle_events(events, _from, state) do
-    # Logger.debug("#{__MODULE__} Received event: #{inspect events}")
+    Logger.debug("#{__MODULE__} Received event: #{inspect events}")
     events |> List.flatten |> do_handle_events(state)
   end
 
@@ -36,17 +37,17 @@ defmodule Medusa.Consumer.RabbitMQ do
     {:noreply, [], state}
   end
 
-  def handle_info(_msg, state) do
-    # Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
+  def handle_info(msg, state) do
+    Logger.debug("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
-  def terminate(_reason, _state) do
-    # Logger.error("""
-    #   #{__MODULE__}
-    #   state: #{inspect state}
-    #   die: #{inspect reason}
-    # """)
+  def terminate(reason, state) do
+    Logger.debug("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
   end
 
   defp do_handle_events([], state) do
@@ -203,16 +204,16 @@ defmodule Medusa.Consumer.RabbitMQ do
   defp requeue_message(
       %Message{metadata: %{
         "message_info" => %{
-          channel: channel, delivery_tag: delivery_tag}}}) do
-    # Logger.warn("Requeueing message #{inspect message}")
+          channel: channel, delivery_tag: delivery_tag}}} = message) do
+    Logger.debug("Requeueing message #{inspect message}")
     AMQP.Basic.nack(channel, delivery_tag, requeue: true)
   end
 
   defp drop_message(
       %Message{metadata: %{
         "message_info" => %{
-          channel: channel, delivery_tag: delivery_tag}}}) do
-    # Logger.warn("Dropping message #{inspect message}")
+          channel: channel, delivery_tag: delivery_tag}}} = message) do
+    Logger.debug("Dropping message #{inspect message}")
     AMQP.Basic.nack(channel, delivery_tag, requeue: false)
   end
 

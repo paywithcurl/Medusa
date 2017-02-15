@@ -58,7 +58,7 @@ defmodule Medusa do
       :ok ->
         adapter().new_route(route, functions, opts)
       {:error, reason} ->
-        Logger.warn("#{inspect reason}")
+        Logger.debug("#{inspect reason}")
         {:error, reason}
     end
   end
@@ -80,7 +80,7 @@ defmodule Medusa do
       :ok ->
         adapter().publish(message)
       {:error, reason} ->
-        Logger.warn "Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}"
+        Logger.debug("Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}")
         {:error, "message is invalid"}
     end
   end

@@ -2,6 +2,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   @moduledoc false
   @behaviour Medusa.Adapter
   use Connection
+  require Logger
   alias Medusa.Message
   alias Medusa.ProducerSupervisor, as: Producer
   alias Medusa.ConsumerSupervisor, as: Consumer
@@ -54,15 +55,15 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def connect(_, state) do
-    # Logger.debug("#{__MODULE__} connecting")
+    Logger.debug("#{__MODULE__} connecting")
     opts = connection_opts()
     ensure_channel_closed(state.channel)
     case AMQP.Connection.open(opts) do
       {:ok, conn} ->
         Process.monitor(conn.pid)
         {:ok, %{state | connection: conn, channel: setup_channel(conn)}}
-      {:error, _error} ->
-        # Logger.warn("#{__MODULE__} connect: #{inspect error}")
+      {:error, error} ->
+        Logger.debug("#{__MODULE__} connect: #{inspect error}")
         {:backoff, 1_000, %{state | connection: nil}}
     end
   end
@@ -76,7 +77,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_call({:new_route, topic, function, opts}, _from, state) do
-    # Logger.debug("#{__MODULE__}: new route #{inspect topic}")
+    Logger.debug("#{__MODULE__}: new route #{inspect topic}")
 
     queue_name =
       opts |> Keyword.get(:queue_name) |> queue_name(topic, function)
@@ -88,14 +89,14 @@ defmodule Medusa.Adapter.RabbitMQ do
       {:reply, :ok, state}
     else
       {:error, error} ->
-        # Logger.error("#{__MODULE__} new_route: #{inspect error}")
+        Logger.debug("#{__MODULE__} new_route: #{inspect error}")
         {:reply, {:error, error}, state}
     end
   end
 
   def handle_call({:publish, %Message{} = message}, _from, state) do
     topic = message.topic
-    # Logger.debug("#{__MODULE__}: publish #{inspect message}")
+    Logger.debug("#{__MODULE__}: publish #{inspect message}")
     case Poison.encode(message) do
       {:ok, message} ->
         {reply, new_state} = do_publish(topic, message, 0, state)
@@ -158,23 +159,23 @@ defmodule Medusa.Adapter.RabbitMQ do
     {:noreply, new_state}
   end
 
-  def handle_info({:basic_consume_ok, _meta}, state) do
-    # Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
+  def handle_info({:basic_consume_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_consume_ok: #{inspect meta}")
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel, _meta}, state) do
-    # Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
+  def handle_info({:basic_cancel, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_cancel: #{inspect meta}")
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel_ok, _meta}, state) do
-    # Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
+  def handle_info({:basic_cancel_ok, meta}, state) do
+    Logger.debug("#{__MODULE__} basic_cancel_ok: #{inspect meta}")
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_deliver, _payload, _meta}, state) do
-    # Logger.debug("#{__MODULE__} basic_deliver: #{inspect payload}")
+  def handle_info({:basic_deliver, payload, _meta}, state) do
+    Logger.debug("#{__MODULE__} basic_deliver: #{inspect payload}")
     {:noreply, state}
   end
 
@@ -189,18 +190,18 @@ defmodule Medusa.Adapter.RabbitMQ do
     end
   end
 
-  def handle_info(_msg, state) do
-    # Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
+  def handle_info(msg, state) do
+    Logger.debug("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
-  def terminate(_reason, state) do
+  def terminate(reason, state) do
     ensure_channel_closed(state.channel)
-    # Logger.error("""
-    #   #{__MODULE__}
-    #   state: #{inspect state}
-    #   die: #{inspect reason}
-    # """)
+    Logger.debug("""
+      #{__MODULE__}
+      state: #{inspect state}
+      die: #{inspect reason}
+    """)
   end
 
   defp setup_channel(conn) do
