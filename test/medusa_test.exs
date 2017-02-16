@@ -1,50 +1,50 @@
 defmodule MedusaTest do
   use ExUnit.Case, async: true
+  import Medusa.TestHelper
   import ExUnit.CaptureLog
 
   doctest Medusa
 
-  test "not config should fallback to default" do
-    Application.delete_env(:medusa, Medusa, persistent: true)
-    Application.stop(:medusa)
-    Application.ensure_all_started(:medusa)
-    assert Application.get_env(:medusa, Medusa) ==
-      [adapter: Medusa.Adapter.PG2]
-  end
+  describe "Config" do
+    test "not config should fallback to default" do
+      Application.delete_env(:medusa, Medusa, persistent: true)
+      Application.stop(:medusa)
+      Application.ensure_all_started(:medusa)
+      assert Application.get_env(:medusa, Medusa) ==
+        [adapter: Medusa.Adapter.PG2]
+    end
 
-  test "config invalid adapter should fallback to PG2" do
-    Application.put_env(:medusa, Medusa, [adapter: Wrong], persistent: true)
-    Application.stop(:medusa)
-    Application.ensure_all_started(:medusa)
-    assert Application.get_env(:medusa, Medusa) ==
-      [adapter: Medusa.Adapter.PG2]
+    test "config invalid adapter should fallback to PG2" do
+      Application.put_env(:medusa, Medusa, [adapter: Wrong], persistent: true)
+      Application.stop(:medusa)
+      Application.ensure_all_started(:medusa)
+      assert Application.get_env(:medusa, Medusa) ==
+        [adapter: Medusa.Adapter.PG2]
+    end
   end
 
   describe "Consumer" do
-    setup do
-      Process.register(self(), :self)
-      :ok
-    end
-
     test "Add consumers" do
-      before = Medusa.ConsumerSupervisor |> Supervisor.which_children |> length
+      before = consumer_children() |> length
       Medusa.consume("foo.bob", &IO.puts/1)
-      afters = Medusa.ConsumerSupervisor |> Supervisor.which_children |> length
+      afters = consumer_children() |> length
       assert afters - before == 1
       assert Process.whereis(:"foo.bob")
     end
 
     test "Add invalid consumer" do
-      result = Medusa.consume("foo.bob", fn -> IO.puts("blah") end)
-      assert result == {:error, "arity must be 1"}
+      assert capture_log(fn ->
+        result = Medusa.consume("foo.bob", fn -> IO.puts("blah") end)
+        assert result == {:error, "consume must be function with arity 1"}
+      end) =~ "consume must be function with arity 1"
     end
 
     test "Add invalid consumers" do
-      assert capture_log(fn() ->
+      assert capture_log(fn ->
         functions = [&IO.inspect/1, :not_a_function]
         result = Medusa.consume("foo.bob", functions)
-        assert result == {:error, "consume must be function"}
-      end) =~ "consume must be function"
+        assert result == {:error, "consume must be function with arity 1"}
+      end) =~ "consume must be function with arity 1"
     end
 
     test "Add multiple consumers" do
@@ -61,11 +61,27 @@ defmodule MedusaTest do
     end
 
     test "Don't publish when validator rejects message" do
-      validator = fn _ -> {:error, "failed"} end
-      MedusaConfig.set_message_validator(:medusa_config, validator)
-      result = Medusa.publish "validator.rejected", %{}, %{}
-      MedusaConfig.set_message_validator(:medusa_config, nil)
-      assert result == {:error, "message is invalid"}
+      id = UUID.uuid4()
+      assert [%{
+        "level" => "error",
+        "message_id" => ^id,
+        "origin" => nil,
+        "rabbitmq_consumer_tag" => nil,
+        "rabbitmq_exchange" => nil,
+        "rabbitmq_host" => _,
+        "rabbitmq_port" => _,
+        "reason" => "publish failed: failed",
+        "request_id" => nil,
+        "routing_key" => nil,
+        "timestamp" => _,
+        "topic" => "validator.rejected"
+      }] = capture_log(fn ->
+        validator = fn _ -> {:error, "failed"} end
+        MedusaConfig.set_message_validator(:medusa_config, validator)
+        result = Medusa.publish "validator.rejected", %{}, %{"id" => id}
+        MedusaConfig.set_message_validator(:medusa_config, nil)
+        assert result == {:error, "message is invalid"}
+      end) |> decode_logger_message
     end
 
     test "Publish when validator accepts message" do
@@ -114,27 +130,75 @@ defmodule MedusaTest do
     end
 
     test "Publish with error extra validator in the middle" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
-      metadata = %{}
-      opts = [message_validators: [&ensures_id_1234/1, &always_ok/1]]
-      result = Medusa.publish("validator.accepted", %{}, metadata, opts)
-      assert result == {:error, "message is invalid"}
+      id = UUID.uuid4()
+      assert [%{
+        "level" => "error",
+        "message_id" => ^id,
+        "origin" => nil,
+        "rabbitmq_consumer_tag" => nil,
+        "rabbitmq_exchange" => nil,
+        "rabbitmq_host" => _,
+        "rabbitmq_port" => _,
+        "reason" => "publish failed: id not matched",
+        "request_id" => nil,
+        "routing_key" => nil,
+        "timestamp" => _,
+        "topic" => "validator.accepted"
+      }] = capture_log(fn ->
+        MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
+        metadata = %{"id" => id}
+        opts = [message_validators: [&ensures_id_1234/1, &always_ok/1]]
+        result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+        assert result == {:error, "message is invalid"}
+      end) |> decode_logger_message
     end
 
     test "Publish with error extra validator in the end" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
-      metadata = %{}
-      opts = [message_validators: [&always_ok/1, &ensures_id_1234/1]]
-      result = Medusa.publish("validator.accepted", %{}, metadata, opts)
-      assert result == {:error, "message is invalid"}
+      id = UUID.uuid4()
+      assert [%{
+        "level" => "error",
+        "message_id" => ^id,
+        "origin" => nil,
+        "rabbitmq_consumer_tag" => nil,
+        "rabbitmq_exchange" => nil,
+        "rabbitmq_host" => _,
+        "rabbitmq_port" => _,
+        "reason" => "publish failed: id not matched",
+        "request_id" => nil,
+        "routing_key" => nil,
+        "timestamp" => _,
+        "topic" => "validator.accepted"
+      }] = capture_log(fn ->
+        MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
+        metadata = %{"id" => id}
+        opts = [message_validators: [&always_ok/1, &ensures_id_1234/1]]
+        result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+        assert result == {:error, "message is invalid"}
+      end) |> decode_logger_message
     end
 
     test "Publish with error extra validator in the global" do
-      MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/1)
-      metadata = %{}
-      opts = [message_validators: [&always_ok/1, &ensures_id_present/1]]
-      result = Medusa.publish("validator.accepted", %{}, metadata, opts)
-      assert result == {:error, "message is invalid"}
+      id = UUID.uuid4()
+      assert [%{
+        "level" => "error",
+        "message_id" => ^id,
+        "origin" => nil,
+        "rabbitmq_consumer_tag" => nil,
+        "rabbitmq_exchange" => nil,
+        "rabbitmq_host" => _,
+        "rabbitmq_port" => _,
+        "reason" => "publish failed: id not matched",
+        "request_id" => nil,
+        "routing_key" => nil,
+        "timestamp" => _,
+        "topic" => "validator.accepted"
+      }] = capture_log(fn ->
+        MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/1)
+        metadata = %{"id" => id}
+        opts = [message_validators: [&always_ok/1, &ensures_id_present/1]]
+        result = Medusa.publish("validator.accepted", %{}, metadata, opts)
+        assert result == {:error, "message is invalid"}
+      end) |> decode_logger_message
     end
   end
 

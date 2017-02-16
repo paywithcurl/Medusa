@@ -71,18 +71,24 @@ defmodule Medusa.Producer.RabbitMQ do
     {:stop, :normal, state}
   end
 
-  def handle_info({:basic_deliver, payload, %{delivery_tag: tag}}, state) do
+  def handle_info({:basic_deliver, payload, meta}, state) do
     case Poison.decode(payload) do
       {:ok, msg} ->
         message = %Message{topic: msg["topic"],
                            body: msg["body"],
                            metadata: msg["metadata"]}
-        message_info = %Message.Info{channel: state.channel, delivery_tag: tag}
+        message_info = %Message.Info{
+          channel: state.channel,
+          delivery_tag: meta[:delivery_tag],
+          routing_key: meta[:routing_key],
+          consumer_tag: meta[:consumer_tag],
+          message_id: meta[:message_id],
+          exchange: meta[:exchange]}
         new_metadata = Map.put(message.metadata, "message_info", message_info)
         message = %{message | metadata: new_metadata}
         {:noreply, [message], %{state | demand: state.demand - 1}}
       _ ->
-        AMQP.Basic.reject(state.channel, tag, requeue: false)
+        AMQP.Basic.reject(state.channel, meta[:delivery_tag], requeue: false)
         {:noreply, [], state}
     end
   end
@@ -96,13 +102,13 @@ defmodule Medusa.Producer.RabbitMQ do
   end
 
   def handle_info(msg, state) do
-    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
+    Logger.debug("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
   def terminate(reason, state) do
     ensure_channel_closed(state.channel)
-    Logger.error("""
+    Logger.debug("""
       #{__MODULE__}
       state: #{inspect state}
       die: #{inspect reason}
@@ -137,7 +143,7 @@ defmodule Medusa.Producer.RabbitMQ do
       chan
     else
       error ->
-        Logger.warn("#{__MODULE__} setup_channel #{inspect error}")
+        Logger.debug("#{__MODULE__} setup_channel #{inspect error}")
         Process.sleep(1_000)
         setup_channel(old_chan, topic, queue_name)
     end

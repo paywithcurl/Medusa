@@ -38,12 +38,12 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   def handle_info(msg, state) do
-    Logger.warn("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
+    Logger.debug("Got unexpected message #{inspect msg} state #{inspect state} from #{inspect self()}")
     {:noreply, state}
   end
 
   def terminate(reason, state) do
-    Logger.error("""
+    Logger.debug("""
       #{__MODULE__}
       state: #{inspect state}
       die: #{inspect reason}
@@ -55,17 +55,17 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp do_handle_events(events, %{callback: f, opts: opts} = state) do
-    Enum.each(events, fn event ->
-      message_info = event.metadata["message_info"]
+    Enum.each(events, fn message ->
+      message_info = message.metadata["message_info"]
       with %AMQP.Channel{} <- message_info.channel,
            tag when is_number(tag) <- message_info.delivery_tag,
            validators = opts.message_validators,
-           :ok <- Medusa.validate_message(validators, event) do
-        do_event(event, f, event, state)
+           :ok <- Medusa.validate_message(validators, message) do
+        do_event(message, f, message, state)
       else
         {:error, reason} ->
-          Logger.warn "Message failed validation #{inspect reason}: #{inspect event}"
-          {:error, "message is invalid"}
+          Medusa.Logger.error(message, reason)
+          {:error, reason}
       end
     end)
     respone_handle_events(state)
@@ -78,60 +78,62 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [callback], original_message, state) do
     try do
-      message_to_sent = scrub_message(message)
-      case callback.(message_to_sent) do
+      message_to_send = scrub_message(message)
+      {timer, result} = :timer.tc(fn -> callback.(message_to_send) end)
+      case result do
         :ok ->
+          Medusa.Logger.info(original_message, processing_time: timer)
           ack_message(original_message)
         :error ->
-          Logger.error("Error processing message #{inspect callback}")
+          Medusa.Logger.error(message, "error processing message")
           retry_event(original_message, state)
         {:error, reason} ->
-          Logger.error("Error processing message #{inspect callback} #{inspect reason}")
+          Medusa.Logger.error(message, inspect(reason))
           retry_event(original_message, state)
         error ->
-          Logger.error("Error processing message #{inspect callback} #{inspect error}")
+          Medusa.Logger.error(message, inspect(error))
           drop_message(original_message)
       end
     rescue
       error ->
-        Logger.error("Error processing message #{inspect callback} #{inspect error}")
+        Medusa.Logger.error(message, inspect(error))
         retry_event(original_message, state)
     catch
       error ->
-        Logger.error("Error processing message #{inspect callback} #{inspect error}")
+        Medusa.Logger.error(message, inspect(error))
         retry_event(original_message, state)
-      error, other_error ->
-        Logger.error("Error processing message #{inspect callback} #{inspect error} #{inspect other_error}")
+      error, _other_error ->
+        Medusa.Logger.error(message, inspect(error))
         retry_event(original_message, state)
     end
   end
 
   defp do_event(%Message{} = message, [callback|tail], original_message, state) do
     try do
-      message_to_sent = scrub_message(message)
-      case callback.(message_to_sent) do
+      message_to_send = scrub_message(message)
+      case callback.(message_to_send) do
         new = %Message{} ->
           do_event(new, tail, original_message, state)
         error ->
-          Logger.error("Error processing message #{inspect callback} #{inspect error}")
+          Medusa.Logger.error(message, inspect(error))
           drop_or_requeue_message(original_message, state)
       end
     rescue
       error ->
-        Logger.error("Error processing message #{inspect callback} #{inspect error}")
+        Medusa.Logger.error(message, inspect(error))
         drop_or_requeue_message(original_message, state)
     catch
       error ->
-        Logger.error("Error processing message #{inspect callback} #{inspect error}")
+        Medusa.Logger.error(message, inspect(error))
         drop_or_requeue_message(original_message, state)
-      error, other_error ->
-        Logger.error("Error processing message #{inspect callback} #{inspect error} #{inspect other_error}")
+      error, _other_error ->
+        Medusa.Logger.error(message, inspect(error))
         drop_or_requeue_message(original_message, state)
     end
   end
 
   defp retry_event(
-      %Message{metadata: metadata} = message,
+      %Message{metadata: _metadata} = message,
       %State{opts: %{max_retries: max_retries}} = state) do
     new_message = update_in(message.metadata["message_info"].retry, &(&1 + 1))
     retried = new_message.metadata["message_info"].retry
@@ -144,7 +146,7 @@ defmodule Medusa.Consumer.RabbitMQ do
         |> :timer.seconds()
       Process.send_after(self(), {:retry, new_message}, time)
     else
-      Logger.warn("Failed processing message #{inspect new_message}")
+      Medusa.Logger.error(message, "error processing message")
       drop_or_requeue_message(new_message, state)
     end
   end
@@ -177,15 +179,15 @@ defmodule Medusa.Consumer.RabbitMQ do
           drop_message(message)
         :keep ->
           requeue_message(message)
-        error ->
-          Logger.error("#{__MODULE__} expected on_failure function to return [:drop, :keep]. got #{inspect error}")
+        _error ->
+          Medusa.Logger.error(message, "expect on_failure function to return [:drop, :keep]")
           requeue_message(message)
       end
       drop_message(message)
   end
 
   defp drop_or_requeue_message(%Message{} = message, _state) do
-    Logger.error("#{__MODULE__} expected [:drop, :keep, function/1] in on_failure")
+    Medusa.Logger.error(message, "expect [:drop, :keep, fun/1] in on_failure")
     drop_message(message)
   end
 
@@ -201,7 +203,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       %Message{metadata: %{
         "message_info" => %{
           channel: channel, delivery_tag: delivery_tag}}} = message) do
-    Logger.warn("Requeueing message #{inspect message}")
+    Logger.debug("Requeueing message #{inspect message}")
     AMQP.Basic.nack(channel, delivery_tag, requeue: true)
   end
 
@@ -209,7 +211,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       %Message{metadata: %{
         "message_info" => %{
           channel: channel, delivery_tag: delivery_tag}}} = message) do
-    Logger.warn("Dropping message #{inspect message}")
+    Logger.debug("Dropping message #{inspect message}")
     AMQP.Basic.nack(channel, delivery_tag, requeue: false)
   end
 

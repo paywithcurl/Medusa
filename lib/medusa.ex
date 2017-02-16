@@ -58,7 +58,7 @@ defmodule Medusa do
       :ok ->
         adapter().new_route(route, functions, opts)
       {:error, reason} ->
-        Logger.warn("#{inspect reason}")
+        Logger.error(reason)
         {:error, reason}
     end
   end
@@ -73,14 +73,12 @@ defmodule Medusa do
       |> map_key_to_string
       |> Map.merge(%{"id" => UUID.uuid4}, fn _k, v1, _v2 -> v1 end)
     message = %Message{topic: event, body: payload, metadata: metadata}
-    opts
-    |> Keyword.get(:message_validators, [])
-    |> validate_message(message)
-    |> case do
+    validators = Keyword.get(opts, :message_validators, [])
+    case validate_message(validators, message) do
       :ok ->
         adapter().publish(message)
       {:error, reason} ->
-        Logger.warn "Message failed validation #{inspect reason}: #{event} #{inspect payload} #{inspect metadata}"
+        Medusa.Logger.error(message, "publish failed: #{reason}")
         {:error, "message is invalid"}
     end
   end
@@ -106,13 +104,13 @@ defmodule Medusa do
         validate_message: &function/3
   """
   def validate_message(functions, %Message{} = message) do
-    global_validator = MedusaConfig.get_message_validator(:medusa_config)
-    functions =
-      cond do
-        is_function(global_validator) -> [global_validator|List.wrap(functions)]
-        true -> List.wrap(functions)
-      end
-    do_validate_message(functions, message)
+    functions = List.wrap(functions)
+    case MedusaConfig.get_message_validator(:medusa_config) do
+      fun when is_function(fun, 1) -> [fun | functions]
+      nil -> functions
+      _others -> {:error, "validate_message must be a function with arity 1"}
+    end
+    |> do_validate_message(message)
   end
 
   defp child_adapter do
@@ -147,7 +145,7 @@ defmodule Medusa do
     end
   end
 
-  defp validate_consume_function(function) when is_function(function) do
+  defp validate_consume_function(function) when is_function(function, 1) do
     validate_consume_function([function])
   end
 
@@ -155,15 +153,16 @@ defmodule Medusa do
     :ok
   end
 
-  defp validate_consume_function([function|tail]) when is_function(function) do
-    case :erlang.fun_info(function, :arity) do
-      {:arity, 1} -> validate_consume_function(tail)
-      _ -> {:error, "arity must be 1"}
-    end
+  defp validate_consume_function([function|tail]) when is_function(function, 1) do
+    validate_consume_function(tail)
   end
 
   defp validate_consume_function(_) do
-    {:error, "consume must be function"}
+    {:error, "consume must be function with arity 1"}
+  end
+
+  defp do_validate_message({:error, reason}, _message) do
+    {:error, reason}
   end
 
   defp do_validate_message([], _message) do
@@ -171,15 +170,18 @@ defmodule Medusa do
   end
 
   defp do_validate_message([function|tail], %Message{} = message)
-  when is_function(function) do
+      when is_function(function, 1) do
     case apply(function, [message]) do
-      :ok -> do_validate_message(tail, message)
-      {:error, reason} -> {:error, reason}
-      reason -> {:error, reason}
+      :ok ->
+        do_validate_message(tail, message)
+      {:error, reason} ->
+        {:error, reason}
+      reason ->
+        {:error, "invalid return from validator, expected [:ok, {:error, reason}]"}
     end
   end
 
-  defp do_validate_message(_, _) do
+  defp do_validate_message(_, %Message{} = message) do
     {:error, "validator is not a function"}
   end
 
