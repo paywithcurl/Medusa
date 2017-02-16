@@ -97,13 +97,16 @@ defmodule Medusa.Adapter.RabbitMQ do
   def handle_call({:publish, %Message{} = message}, _from, state) do
     topic = message.topic
     Logger.debug("#{__MODULE__}: publish #{inspect message}")
-    case Poison.encode(message) do
-      {:ok, message} ->
-        {reply, new_state} = do_publish(topic, message, 0, state)
-        {:reply, reply, new_state}
-      {:error, reason} ->
+    with {:ok, message_bin} <- Poison.encode(message),
+         {:ok, new_state} <- do_publish(topic, message_bin, 0, state) do
+      Medusa.Logger.info(message)
+      {:reply, :ok, new_state}
+    else
+      {:error, {:invalid, _}} ->
         Medusa.Logger.error(message, "malformed message")
-        {:reply, {:error, reason}, state}
+      {{:error, reason}, new_state} ->
+        Medusa.Logger.error(message, inspect(reason))
+        {:reply, {:error, reason}, new_state}
     end
   end
 
@@ -256,18 +259,15 @@ defmodule Medusa.Adapter.RabbitMQ do
                          message,
                          message_id: message_id,
                          persistent: true)
-      Medusa.Logger.info(message)
       {:ok, state}
     rescue
-      _ ->
-        Medusa.Logger.error(message, "cannot publish")
+      reason ->
         new_messages = :queue.in({topic, message, times + 1}, messages)
-        {:error, %{state | messages: new_messages}}
+        {{:error, reason}, %{state | messages: new_messages}}
     end
   end
 
   defp do_publish(topic, message, times, %{messages: messages} = state) do
-    Medusa.Logger.error(message, "cannot connect rabbitmq")
     new_messages = :queue.in({topic, message, times}, messages)
     {{:error, "cannot connect rabbitmq"}, %{state | messages: new_messages}}
   end

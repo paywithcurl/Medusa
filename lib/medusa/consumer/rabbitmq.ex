@@ -63,9 +63,9 @@ defmodule Medusa.Consumer.RabbitMQ do
            :ok <- Medusa.validate_message(validators, message) do
         do_event(message, f, message, state)
       else
-        {:error, _reason} ->
-          Medusa.Logger.error(message, "message failed validation")
-          {:error, "message is invalid"}
+        {:error, reason} ->
+          Medusa.Logger.error(message, reason)
+          {:error, reason}
       end
     end)
     respone_handle_events(state)
@@ -78,8 +78,8 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [callback], original_message, state) do
     try do
-      message_to_sent = scrub_message(message)
-      {timer, result} = :timer.tc(fn -> callback.(message_to_sent) end)
+      message_to_send = scrub_message(message)
+      {timer, result} = :timer.tc(fn -> callback.(message_to_send) end)
       case result do
         :ok ->
           Medusa.Logger.info(original_message, processing_time: timer)
@@ -110,8 +110,8 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [callback|tail], original_message, state) do
     try do
-      message_to_sent = scrub_message(message)
-      case callback.(message_to_sent) do
+      message_to_send = scrub_message(message)
+      case callback.(message_to_send) do
         new = %Message{} ->
           do_event(new, tail, original_message, state)
         error ->
