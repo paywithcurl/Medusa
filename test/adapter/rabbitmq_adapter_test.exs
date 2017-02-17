@@ -254,7 +254,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       end)
     end
 
-    test "setting on_failure to function/1 which return :drop should drop" do
+    test "setting on_failure to function/2 which return :drop should drop" do
       topic = "rabbit.retry.failed2"
       body = UUID.uuid4()
       capture_log(fn ->
@@ -262,14 +262,14 @@ defmodule Medusa.Adapter.RabbitMQTest do
                              &message_to_test/1,
                              queue_name: "rabbit_retry_failed_test_2",
                              max_retries: 1,
-                             on_failure: &always_drop/1)
+                             on_failure: &always_drop/2)
         Process.sleep(1_000)
         publish_test_message(topic, body, %{"times" => 2, "agent" => false})
         refute_receive %Message{body: ^body, topic: ^topic}, 1_000
       end)
     end
 
-    test "setting on_failure to function/1 which return :keep should requeue" do
+    test "setting on_failure to function/2 which return :keep should requeue" do
       topic = UUID.uuid4()
       body = UUID.uuid4()
       capture_log(fn ->
@@ -277,14 +277,14 @@ defmodule Medusa.Adapter.RabbitMQTest do
                              &message_to_test/1,
                              queue_name: UUID.uuid4(),
                              max_retries: 1,
-                             on_failure: &always_keep/1)
+                             on_failure: &always_keep/2)
         Process.sleep(1_000)
         publish_test_message(topic, body, %{"times" => 2})
         assert_receive %Message{body: ^body, topic: ^topic}, 1_000
       end)
     end
 
-    test "setting on failure to function/1 which return others should logged and requeue" do
+    test "setting on failure to function/2 which return others should logged and requeue" do
       topic = UUID.uuid4()
       body = UUID.uuid4()
       capture_log(fn ->
@@ -292,7 +292,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
                              &message_to_test/1,
                              queue_name: UUID.uuid4(),
                              max_retries: 1,
-                             on_failure: &always_ok/1)
+                             on_failure: &always_ok/2)
         Process.sleep(1_000)
         publish_test_message(topic, body, %{"times" => 2})
         assert_receive %Message{body: ^body, topic: ^topic}, 1_000
@@ -643,11 +643,17 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   defp always_ok(_message), do: :ok
 
+  defp always_ok(_message, _reason), do: :ok
+
   defp always_error(_message), do: :error
 
   defp always_drop(_message), do: :drop
 
+  defp always_drop(_message, _reason), do: :drop
+
   defp always_keep(_message), do: :keep
+
+  defp always_keep(_message, _reason), do: :keep
 
   defp invalid_config(host) do
     [adapter: Medusa.Adapter.RabbitMQ,
