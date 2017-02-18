@@ -86,7 +86,8 @@ defmodule Medusa.Consumer.RabbitMQ do
       {timer, result} = :timer.tc(fn -> callback.(message_to_send) end)
       case result do
         :ok ->
-          Medusa.Logger.info(original_message, processing_time: timer)
+          total_timer = message.metadata["message_info"].processing_time + timer
+          Medusa.Logger.info(original_message, processing_time: total_timer)
           ack_message(original_message)
         :error ->
           Medusa.Logger.error(message, "error processing message")
@@ -114,9 +115,10 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [callback|tail], original_message, state) do
     try do
-      message_to_send = scrub_message(message)
-      case callback.(message_to_send) do
-        new_message = %Message{} ->
+      {timer, result} = :timer.tc(fn -> callback.(message) end)
+      case result do
+        %Message{} = new_message ->
+          new_message = update_in(new_message.metadata["message_info"].processing_time, &(&1 + timer))
           do_event(new_message, tail, original_message, state)
         :error ->
           Medusa.Logger.error(message, "error processing message")
