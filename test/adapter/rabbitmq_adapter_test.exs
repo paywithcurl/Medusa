@@ -334,22 +334,48 @@ defmodule Medusa.Adapter.RabbitMQTest do
   end
 
   describe "Multi functions in consume wrong failure in the middle" do
-    test "not return %Message{} with on_failure to :drop should drop immediately" do
+    test "not return %Message{} should retry" do
       topic = UUID.uuid4()
       body = UUID.uuid4()
       capture_log(fn ->
         :ok = Medusa.consume(topic,
-                             [&error_message/1, &forward_message_to_test/1],
+                             [&message_to_test/1, &forward_message_to_test/1],
                              queue_name: UUID.uuid4(),
                              on_failure: :drop)
         Process.sleep(1_000)
-        publish_test_message(topic, body, %{"agent" => false})
+        publish_test_message(topic, body, %{"times" => 1, "middleware" => true})
+        assert_receive %Message{body: ^body, topic: ^topic}, 1_000
+      end)
+    end
+
+    test "not return %Message{} with on_failure to :drop should drop after retries" do
+      topic = UUID.uuid4()
+      body = UUID.uuid4()
+      capture_log(fn ->
+        :ok = Medusa.consume(topic,
+                             [&message_to_test/1, &forward_message_to_test/1],
+                             queue_name: UUID.uuid4(),
+                             max_retries: 1,
+                             on_failure: :drop)
+        Process.sleep(1_000)
+        publish_test_message(topic, body, %{"times" => 2, "middleware" => true})
         refute_receive %Message{body: ^body, topic: ^topic}, 1_000
       end)
     end
 
-    # DON'T KNOW HOW TO TEST IT
     test "not return %Message{} with on_failure to :keep should requeue" do
+      topic = UUID.uuid4()
+      body = UUID.uuid4()
+      capture_log(fn ->
+        :ok = Medusa.consume(topic,
+                             [&message_to_test/1, &forward_message_to_test/1],
+                             queue_name: UUID.uuid4(),
+                             max_retries: 1,
+                             on_failure: :keep)
+        Process.sleep(1_000)
+        publish_test_message(topic, body, %{"times" => 2, "middleware" => true})
+        assert_receive %Message{body: ^body, topic: ^topic}, 1_000
+      end)
     end
   end
 
@@ -639,19 +665,13 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
   end
 
-
-
   defp always_ok(_message), do: :ok
 
   defp always_ok(_message, _reason), do: :ok
 
   defp always_error(_message), do: :error
 
-  defp always_drop(_message), do: :drop
-
   defp always_drop(_message, _reason), do: :drop
-
-  defp always_keep(_message), do: :keep
 
   defp always_keep(_message, _reason), do: :keep
 

@@ -97,8 +97,8 @@ defmodule Medusa.TestHelper do
           nil
       end
     cond do
-      agent_retry_left == 0 -> forward_message_to_test(message)
       agent_retry_left == 0 && metadata["middleware"] -> message
+      agent_retry_left == 0 -> forward_message_to_test(message)
       metadata["bad_return"] -> :bad_return
       metadata["raise"] -> raise "Boom!"
       metadata["throw"] -> throw "Bamm!"

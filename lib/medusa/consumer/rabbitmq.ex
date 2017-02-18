@@ -116,8 +116,14 @@ defmodule Medusa.Consumer.RabbitMQ do
     try do
       message_to_send = scrub_message(message)
       case callback.(message_to_send) do
-        new = %Message{} ->
-          do_event(new, tail, original_message, state)
+        new_message = %Message{} ->
+          do_event(new_message, tail, original_message, state)
+        :error ->
+          Medusa.Logger.error(message, "error processing message")
+          retry_event(original_message, state)
+        {:error, reason} ->
+          Medusa.Logger.error(message, inspect(reason))
+          retry_event(original_message, state)
         error ->
           Medusa.Logger.error(message, inspect(error))
           failure = %Failure{message: original_message, reason: error}
@@ -126,17 +132,14 @@ defmodule Medusa.Consumer.RabbitMQ do
     rescue
       error ->
         Medusa.Logger.error(message, inspect(error))
-        failure = %Failure{message: original_message, reason: error}
-        drop_or_requeue_message(failure, state)
+        retry_event(original_message, state)
     catch
       error ->
         Medusa.Logger.error(message, inspect(error))
-        failure = %Failure{message: original_message, reason: error}
-        drop_or_requeue_message(failure, state)
+        retry_event(original_message, state)
       error, _other_error ->
         Medusa.Logger.error(message, inspect(error))
-        failure = %Failure{message: original_message, reason: error}
-        drop_or_requeue_message(failure, state)
+        retry_event(original_message, state)
     end
   end
 
