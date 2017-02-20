@@ -9,6 +9,10 @@ defmodule Medusa.Consumer.RabbitMQ do
     defstruct callback: nil, producer: nil, opts: []
   end
 
+  defmodule Failure do
+    defstruct message: nil, reason: nil
+  end
+
   def start_link(opts) do
     GenStage.start_link(__MODULE__, opts)
   end
@@ -82,7 +86,8 @@ defmodule Medusa.Consumer.RabbitMQ do
       {timer, result} = :timer.tc(fn -> callback.(message_to_send) end)
       case result do
         :ok ->
-          Medusa.Logger.info(original_message, processing_time: timer)
+          total_timer = message.metadata["message_info"].processing_time + timer
+          Medusa.Logger.info(original_message, processing_time: total_timer)
           ack_message(original_message)
         :error ->
           Medusa.Logger.error(message, "error processing message")
@@ -110,25 +115,33 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp do_event(%Message{} = message, [callback|tail], original_message, state) do
     try do
-      message_to_send = scrub_message(message)
-      case callback.(message_to_send) do
-        new = %Message{} ->
-          do_event(new, tail, original_message, state)
+      {timer, result} = :timer.tc(fn -> callback.(message) end)
+      case result do
+        %Message{} = new_message ->
+          new_message = update_in(new_message.metadata["message_info"].processing_time, &(&1 + timer))
+          do_event(new_message, tail, original_message, state)
+        :error ->
+          Medusa.Logger.error(message, "error processing message")
+          retry_event(original_message, state)
+        {:error, reason} ->
+          Medusa.Logger.error(message, inspect(reason))
+          retry_event(original_message, state)
         error ->
           Medusa.Logger.error(message, inspect(error))
-          drop_or_requeue_message(original_message, state)
+          failure = %Failure{message: original_message, reason: error}
+          drop_or_requeue_message(failure, state)
       end
     rescue
       error ->
         Medusa.Logger.error(message, inspect(error))
-        drop_or_requeue_message(original_message, state)
+        retry_event(original_message, state)
     catch
       error ->
         Medusa.Logger.error(message, inspect(error))
-        drop_or_requeue_message(original_message, state)
+        retry_event(original_message, state)
       error, _other_error ->
         Medusa.Logger.error(message, inspect(error))
-        drop_or_requeue_message(original_message, state)
+        retry_event(original_message, state)
     end
   end
 
@@ -147,7 +160,8 @@ defmodule Medusa.Consumer.RabbitMQ do
       Process.send_after(self(), {:retry, new_message}, time)
     else
       Medusa.Logger.error(message, "error processing message")
-      drop_or_requeue_message(new_message, state)
+      failure = %Failure{message: new_message, reason: "reach max_retries"}
+      drop_or_requeue_message(failure, state)
     end
   end
 
@@ -160,33 +174,34 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp drop_or_requeue_message(
-      %Message{} = message,
+      %Failure{message: %Message{} = message},
       %{opts: %{on_failure: :drop}}) do
     drop_message(message)
   end
 
   defp drop_or_requeue_message(
-      %Message{} = message,
+      %Failure{message: %Message{} = message},
       %{opts: %{on_failure: :keep}}) do
     requeue_message(message)
   end
 
   defp drop_or_requeue_message(
-      %Message{} = message,
-      %{opts: %{on_failure: callback}}) when is_function(callback, 1) do
-      case callback.(message) do
-        :drop ->
-          drop_message(message)
-        :keep ->
-          requeue_message(message)
-        _error ->
-          Medusa.Logger.error(message, "expect on_failure function to return [:drop, :keep]")
-          requeue_message(message)
-      end
-      drop_message(message)
+      %Failure{message: %Message{} = message, reason: reason},
+      %{opts: %{on_failure: callback}}) when is_function(callback, 2) do
+    case callback.(message, reason) do
+      :drop ->
+        drop_message(message)
+      :keep ->
+        requeue_message(message)
+      _error ->
+        Medusa.Logger.error(message, "expect on_failure function to return [:drop, :keep]")
+        requeue_message(message)
+    end
+    drop_message(message)
   end
 
-  defp drop_or_requeue_message(%Message{} = message, _state) do
+  defp drop_or_requeue_message(
+      %Failure{message: %Message{} = message}, _state) do
     Medusa.Logger.error(message, "expect [:drop, :keep, fun/1] in on_failure")
     drop_message(message)
   end

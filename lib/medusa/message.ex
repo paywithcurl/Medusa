@@ -9,7 +9,8 @@ defmodule Medusa.Message do
       consumer_tag: nil,
       message_id: nil,
       exchange: nil,
-      retry: 0
+      retry: 0,
+      processing_time: 0
     ]
   end
 end
