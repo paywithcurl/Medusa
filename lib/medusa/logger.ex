@@ -11,53 +11,53 @@ defmodule Medusa.Logger do
   defmacro info(message, opts \\ []) do
     quote do
       belongs = __MODULE__.logger_belongs()
-      Medusa.Logger.do_info(unquote(message), unquote(opts), belongs)
+      Medusa.Logger.info(unquote(message), unquote(opts), belongs)
     end
   end
 
   defmacro error(message, reason) do
     quote do
       belongs = __MODULE__.logger_belongs()
-      Medusa.Logger.do_error(unquote(message), unquote(reason), belongs)
+      Medusa.Logger.error(unquote(message), unquote(reason), belongs)
     end
   end
 
-  def do_info(message, opts, belongs) when is_binary(message) do
-    message |> Poison.decode! |> do_info(opts, belongs)
+  def info(message, opts, belongs) when is_binary(message) do
+    message |> Poison.decode! |> info(opts, belongs)
   end
 
-  def do_info(%{"body" => body,
+  def info(%{"body" => body,
                 "metadata" => metadata,
                 "topic" => topic},
               opts, belongs) do
-    do_info(%{body: body, metadata: metadata, topic: topic}, opts, belongs)
+    info(%{body: body, metadata: metadata, topic: topic}, opts, belongs)
   end
 
-  def do_info(%{body: body, metadata: _, topic: _} = message, opts, belongs) do
+  def info(%{body: body, metadata: _, topic: _} = message, opts, belongs) do
     message
     |> base_message(belongs)
     |> Map.merge(%{level: "info", body: body, processing_time: opts[:processing_time]})
-    |> Poison.encode!
+    |> format_log_message
     |> Logger.info
   end
 
-  def do_error(%{"body" => body,
+  def error(%{"body" => body,
                  "metadata" => metadata,
                  "topic" => topic},
                 reason, belongs) do
-    do_error(%{body: body, metadata: metadata, topic: topic}, reason, belongs)
+    error(%{body: body, metadata: metadata, topic: topic}, reason, belongs)
   end
 
-  def do_error(%{body: _, metadata: _, topic: _} = message, reason, belongs) do
+  def error(%{body: _, metadata: _, topic: _} = message, reason, belongs) do
     message
     |> base_message(belongs)
     |> Map.merge(%{level: "error", reason: reason})
-    |> Poison.encode!
+    |> format_log_message
     |> Logger.error
   end
 
-  def do_error(message, reason, belongs) when is_binary(message) do
-    message |> Poison.decode! |> do_error(reason, belongs)
+  def error(message, reason, belongs) when is_binary(message) do
+    message |> Poison.decode! |> error(reason, belongs)
   end
 
   defp base_message(%{metadata: metadata, topic: topic}, belongs) do
@@ -80,5 +80,12 @@ defmodule Medusa.Logger do
 
   defp base_message(%{"metadata" => metadata, "topic" => topic}, belongs) do
     base_message(%{metadata: metadata, topic: topic}, belongs)
+  end
+
+  defp format_log_message(message) do
+    case Mix.env() do
+      :dev -> inspect(message, pretty: true)
+      _ -> Poison.encode!(message)
+    end
   end
 end
