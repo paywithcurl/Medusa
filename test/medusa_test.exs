@@ -63,6 +63,7 @@ defmodule MedusaTest do
     test "Don't publish when validator rejects message" do
       id = UUID.uuid4()
       assert [%{
+        "belongs" => "publishing",
         "level" => "error",
         "message_id" => ^id,
         "origin" => nil,
@@ -132,6 +133,7 @@ defmodule MedusaTest do
     test "Publish with error extra validator in the middle" do
       id = UUID.uuid4()
       assert [%{
+        "belongs" => "publishing",
         "level" => "error",
         "message_id" => ^id,
         "origin" => nil,
@@ -156,6 +158,7 @@ defmodule MedusaTest do
     test "Publish with error extra validator in the end" do
       id = UUID.uuid4()
       assert [%{
+        "belongs" => "publishing",
         "level" => "error",
         "message_id" => ^id,
         "origin" => nil,
@@ -180,6 +183,7 @@ defmodule MedusaTest do
     test "Publish with error extra validator in the global" do
       id = UUID.uuid4()
       assert [%{
+        "belongs" => "publishing",
         "level" => "error",
         "message_id" => ^id,
         "origin" => nil,

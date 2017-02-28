@@ -2,6 +2,7 @@ defmodule Medusa.Adapter.RabbitMQ do
   @moduledoc false
   @behaviour Medusa.Adapter
   use Connection
+  use Medusa.Logger, :publishing
   require Logger
   alias Medusa.Message
   alias Medusa.ProducerSupervisor, as: Producer

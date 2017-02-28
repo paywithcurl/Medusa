@@ -1,5 +1,6 @@
 defmodule Medusa do
   use Application
+  use Medusa.Logger, :publishing
   require Logger
   import Supervisor.Spec, warn: false
   alias Medusa.Message

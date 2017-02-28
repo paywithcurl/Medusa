@@ -563,6 +563,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
       origin = UUID.uuid4()
       body = UUID.uuid4()
       assert [%{
+        "belongs" => "publishing",
         "level" => "info",
         "message_id" => ^id,
         "origin" => ^origin,
@@ -609,6 +610,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
       messages = Enum.filter(messages, & &1["routing_key"]) # only consume message
       assert [%{
+        "belongs" => "consumption",
         "level" => "info",
         "message_id" => ^id,
         "origin" => ^origin,
@@ -649,6 +651,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
       [message, _] = Enum.filter(messages, & &1["routing_key"]) # only consume message
       assert %{
+        "belongs" => "consumption",
         "level" => "error",
         "message_id" => ^id,
         "origin" => ^origin,

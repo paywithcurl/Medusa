@@ -2,6 +2,7 @@ alias Experimental.GenStage
 
 defmodule Medusa.Consumer.RabbitMQ do
   use GenStage
+  use Medusa.Logger, :consumption
   require Logger
   alias Medusa.Message
 
