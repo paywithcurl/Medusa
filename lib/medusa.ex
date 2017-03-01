@@ -1,6 +1,5 @@
 defmodule Medusa do
   use Application
-  use Medusa.Logger, :publishing
   require Logger
   import Supervisor.Spec, warn: false
   alias Medusa.Message
@@ -79,7 +78,9 @@ defmodule Medusa do
       :ok ->
         adapter().publish(message)
       {:error, reason} ->
-        Medusa.Logger.error(message, "publish failed: #{reason}")
+        Medusa.Logger.error(message,
+                            reason: "publish failed: #{reason}",
+                            belongs: "publishing")
         {:error, "message is invalid"}
     end
   end

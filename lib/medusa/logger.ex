@@ -1,63 +1,57 @@
 defmodule Medusa.Logger do
   require Logger
 
-  defmacro __using__(type) when is_binary(type) or is_atom(type) do
-    type = to_string(type)
-    quote do
-      def logger_belongs, do: unquote(type)
-    end
+  def info(message, opts) when is_binary(message) do
+    message
+    |> Poison.decode!
+    |> info(opts)
   end
 
-  defmacro info(message, opts \\ []) do
-    quote do
-      belongs = __MODULE__.logger_belongs()
-      Medusa.Logger.info(unquote(message), unquote(opts), belongs)
-    end
+  def info(
+      %{"body" => body,
+        "metadata" => metadata,
+        "topic" => topic},
+      opts) do
+    info(%{body: body, metadata: metadata, topic: topic}, opts)
   end
 
-  defmacro error(message, reason) do
-    quote do
-      belongs = __MODULE__.logger_belongs()
-      Medusa.Logger.error(unquote(message), unquote(reason), belongs)
-    end
-  end
-
-  def info(message, opts, belongs) when is_binary(message) do
-    message |> Poison.decode! |> info(opts, belongs)
-  end
-
-  def info(%{"body" => body,
-                "metadata" => metadata,
-                "topic" => topic},
-              opts, belongs) do
-    info(%{body: body, metadata: metadata, topic: topic}, opts, belongs)
-  end
-
-  def info(%{body: body, metadata: _, topic: _} = message, opts, belongs) do
+  def info(
+      %{body: body,
+        metadata: _,
+        topic: _} = message,
+      opts) do
+    belongs = opts |> Keyword.fetch!(:belongs) |> to_string
     message
     |> base_message(belongs)
-    |> Map.merge(%{level: "info", body: body, processing_time: opts[:processing_time]})
+    |> Map.merge(%{level: "info",
+                   body: body,
+                   processing_time: opts[:processing_time]})
     |> format_log_message
     |> Logger.info
   end
 
-  def error(%{"body" => body,
-                 "metadata" => metadata,
-                 "topic" => topic},
-                reason, belongs) do
-    error(%{body: body, metadata: metadata, topic: topic}, reason, belongs)
+  def error(message, opts) when is_binary(message) do
+    message
+    |> Poison.decode!
+    |> error(opts)
   end
 
-  def error(%{body: _, metadata: _, topic: _} = message, reason, belongs) do
+  def error(
+      %{"body" => body,
+        "metadata" => metadata,
+        "topic" => topic},
+      opts) do
+    error(%{body: body, metadata: metadata, topic: topic}, opts)
+  end
+
+  def error(%{body: _, metadata: _, topic: _} = message, opts) do
+    belongs = opts |> Keyword.fetch!(:belongs) |> to_string
+    reason = opts |> Keyword.fetch!(:reason)
     message
     |> base_message(belongs)
     |> Map.merge(%{level: "error", reason: reason})
     |> format_log_message
     |> Logger.error
-  end
-
-  def error(message, reason, belongs) when is_binary(message) do
-    message |> Poison.decode! |> error(reason, belongs)
   end
 
   defp base_message(%{metadata: metadata, topic: topic}, belongs) do
