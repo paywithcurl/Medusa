@@ -68,7 +68,7 @@ defmodule Medusa.Consumer.RabbitMQ do
         do_event(message, f, message, state)
       else
         {:error, reason} ->
-          Medusa.Logger.error(message, reason)
+          Medusa.Logger.error(message, reason: reason, belongs: "consumption")
           {:error, reason}
       end
     end)
@@ -87,28 +87,42 @@ defmodule Medusa.Consumer.RabbitMQ do
       case result do
         :ok ->
           total_timer = message.metadata["message_info"].processing_time + timer
-          Medusa.Logger.info(original_message, processing_time: total_timer)
+          Medusa.Logger.info(original_message,
+                             processing_time: total_timer,
+                             belongs: "consumption")
           ack_message(original_message)
         :error ->
-          Medusa.Logger.error(message, "error processing message")
+          Medusa.Logger.error(message,
+                              reason: "error processing message",
+                              belongs: "consumption")
           retry_event(original_message, state)
         {:error, reason} ->
-          Medusa.Logger.error(message, inspect(reason))
+          Medusa.Logger.error(message,
+                              reason: inspect(reason),
+                              belongs: "consumption")
           retry_event(original_message, state)
         error ->
-          Medusa.Logger.error(message, inspect(error))
+          Medusa.Logger.error(message,
+                              reason: inspect(error),
+                              belongs: "consumption")
           drop_message(original_message)
       end
     rescue
       error ->
-        Medusa.Logger.error(message, inspect(error))
+        Medusa.Logger.error(message,
+                            reason: inspect(error),
+                            belongs: "consumption")
         retry_event(original_message, state)
     catch
       error ->
-        Medusa.Logger.error(message, inspect(error))
+        Medusa.Logger.error(message,
+                            reason: inspect(error),
+                            belongs: "consumption")
         retry_event(original_message, state)
       error, _other_error ->
-        Medusa.Logger.error(message, inspect(error))
+        Medusa.Logger.error(message,
+                            reason: inspect(error),
+                            belongs: "consumption")
         retry_event(original_message, state)
     end
   end
@@ -121,26 +135,38 @@ defmodule Medusa.Consumer.RabbitMQ do
           new_message = update_in(new_message.metadata["message_info"].processing_time, &(&1 + timer))
           do_event(new_message, tail, original_message, state)
         :error ->
-          Medusa.Logger.error(message, "error processing message")
+          Medusa.Logger.error(message,
+                              reason: "error processing message",
+                              belongs: "consumption")
           retry_event(original_message, state)
         {:error, reason} ->
-          Medusa.Logger.error(message, inspect(reason))
+          Medusa.Logger.error(message,
+                              reason: inspect(reason),
+                              belongs: "consumption")
           retry_event(original_message, state)
         error ->
-          Medusa.Logger.error(message, inspect(error))
+          Medusa.Logger.error(message,
+                              reason: inspect(error),
+                              belongs: "consumption")
           failure = %Failure{message: original_message, reason: error}
           drop_or_requeue_message(failure, state)
       end
     rescue
       error ->
-        Medusa.Logger.error(message, inspect(error))
+        Medusa.Logger.error(message,
+                            reason: inspect(error),
+                            belongs: "consumption")
         retry_event(original_message, state)
     catch
       error ->
-        Medusa.Logger.error(message, inspect(error))
+        Medusa.Logger.error(message,
+                            reason: inspect(error),
+                            belongs: "consumption")
         retry_event(original_message, state)
       error, _other_error ->
-        Medusa.Logger.error(message, inspect(error))
+        Medusa.Logger.error(message,
+                            reason: inspect(error),
+                            belongs: "consumption")
         retry_event(original_message, state)
     end
   end
@@ -159,7 +185,9 @@ defmodule Medusa.Consumer.RabbitMQ do
         |> :timer.seconds()
       Process.send_after(self(), {:retry, new_message}, time)
     else
-      Medusa.Logger.error(message, "error processing message")
+      Medusa.Logger.error(message,
+                          reason: "error processing message",
+                          belongs: "consumption")
       failure = %Failure{message: new_message, reason: "reach max_retries"}
       drop_or_requeue_message(failure, state)
     end
@@ -194,7 +222,9 @@ defmodule Medusa.Consumer.RabbitMQ do
       :keep ->
         requeue_message(message)
       _error ->
-        Medusa.Logger.error(message, "expect on_failure function to return [:drop, :keep]")
+        Medusa.Logger.error(message,
+                            reason: "expect on_failure function to return [:drop, :keep]",
+                            belongs: "consumption")
         requeue_message(message)
     end
     drop_message(message)
@@ -202,7 +232,9 @@ defmodule Medusa.Consumer.RabbitMQ do
 
   defp drop_or_requeue_message(
       %Failure{message: %Message{} = message}, _state) do
-    Medusa.Logger.error(message, "expect [:drop, :keep, fun/1] in on_failure")
+    Medusa.Logger.error(message,
+                        reason: "expect [:drop, :keep, fun/1] in on_failure",
+                        belongs: "consumption")
     drop_message(message)
   end
 

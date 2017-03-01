@@ -78,7 +78,9 @@ defmodule Medusa do
       :ok ->
         adapter().publish(message)
       {:error, reason} ->
-        Medusa.Logger.error(message, "publish failed: #{reason}")
+        Medusa.Logger.error(message,
+                            reason: "publish failed: #{reason}",
+                            belongs: "publishing")
         {:error, "message is invalid"}
     end
   end

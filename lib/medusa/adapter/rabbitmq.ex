@@ -99,13 +99,17 @@ defmodule Medusa.Adapter.RabbitMQ do
     Logger.debug("#{__MODULE__}: publish #{inspect message}")
     with {:ok, message_bin} <- Poison.encode(message),
          {:ok, new_state} <- do_publish(topic, message_bin, 0, state) do
-      Medusa.Logger.info(message)
+      Medusa.Logger.info(message, belongs: "publishing")
       {:reply, :ok, new_state}
     else
       {:error, {:invalid, _}} ->
-        Medusa.Logger.error(message, "malformed message")
+        Medusa.Logger.error(message,
+                            reason: "malformed message",
+                            belongs: "publishing")
       {{:error, reason}, new_state} ->
-        Medusa.Logger.error(message, inspect(reason))
+        Medusa.Logger.error(message,
+                            reason: inspect(reason),
+                            belongs: "publishing")
         {:reply, {:error, reason}, new_state}
     end
   end
@@ -152,7 +156,9 @@ defmodule Medusa.Adapter.RabbitMQ do
           acc
 
         {{:value, {_topic, message, _}}, new_messages} ->
-          Medusa.Logger.error(message, "reach max retries")
+          Medusa.Logger.error(message,
+                              reason: "reach max retries",
+                              belongs: "publishing")
           %{acc | messages: new_messages}
 
         {:empty, new_messages} ->
