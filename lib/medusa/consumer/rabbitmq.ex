@@ -109,17 +109,23 @@ defmodule Medusa.Consumer.RabbitMQ do
       end
     rescue
       error ->
+        Exception.format(:error, :erlang.get_stacktrace())
+        |> Logger.error
         Medusa.Logger.error(message,
                             reason: inspect(error),
                             belongs: "consumption")
         retry_event(original_message, state)
     catch
       error ->
+        Exception.format(:error, :erlang.get_stacktrace())
+        |> Logger.error
         Medusa.Logger.error(message,
                             reason: inspect(error),
                             belongs: "consumption")
         retry_event(original_message, state)
       error, _other_error ->
+        Exception.format(:error, :erlang.get_stacktrace())
+        |> Logger.error
         Medusa.Logger.error(message,
                             reason: inspect(error),
                             belongs: "consumption")
@@ -153,17 +159,23 @@ defmodule Medusa.Consumer.RabbitMQ do
       end
     rescue
       error ->
+        Exception.format(:error, :erlang.get_stacktrace())
+        |> Logger.error
         Medusa.Logger.error(message,
                             reason: inspect(error),
                             belongs: "consumption")
         retry_event(original_message, state)
     catch
       error ->
+        Exception.format(:error, :erlang.get_stacktrace())
+        |> Logger.error
         Medusa.Logger.error(message,
                             reason: inspect(error),
                             belongs: "consumption")
         retry_event(original_message, state)
       error, _other_error ->
+        Exception.format(:error, :erlang.get_stacktrace())
+        |> Logger.error
         Medusa.Logger.error(message,
                             reason: inspect(error),
                             belongs: "consumption")
