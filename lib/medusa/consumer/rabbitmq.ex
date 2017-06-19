@@ -292,7 +292,22 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp callback_on_exception(fun, message, error) do
-    fun.(message, error, System.stacktrace)
+    reason =
+      case Exception.exception?(error) do
+        true -> error
+        false -> %RuntimeError{message: error}
+      end
+    try do
+      fun.(message, reason, System.stacktrace)
+    rescue
+      error ->
+        Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
+    catch
+      error ->
+        Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
+      error, _other_error ->
+        Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
+    end
   end
 
   defp stack_error(error) do
