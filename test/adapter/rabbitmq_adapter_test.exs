@@ -629,31 +629,13 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
   describe "exception hook" do
-    test "callback return error" do
-      topic = UUID.uuid4()
-      id = UUID.uuid4()
-      messages = capture_log(fn ->
-        :ok = Medusa.consume(topic,
-                             &always_error/1,
-                             queue_name: UUID.uuid4(),
-                             max_retries: 0,
-                             exception_hook: &exception_hook/2,
-                             on_failure: :drop)
-         Process.sleep(1_000)
-         metadata = %{"id" => id}
-         publish_test_message(topic, %{}, metadata)
-       refute_receive %Message{topic: ^topic}, 1_000
-      end)
-      assert_receive %{"error" => "error processing message", "id" => ^id}
-    end
-
     test "callback raise exception" do
       topic = UUID.uuid4()
       capture_log(fn ->
         :ok = Medusa.consume(topic,
                              &message_to_test/1,
                              queue_name: UUID.uuid4(),
-                             exception_hook: &exception_hook/2,
+                             on_exception: &on_exception/2,
                              max_retries: 0,
                              on_failure: :drop)
         Process.sleep(1_000)
@@ -668,7 +650,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
         :ok = Medusa.consume(topic,
                              &message_to_test/1,
                              queue_name: UUID.uuid4(),
-                             exception_hook: &exception_hook/2,
+                             on_exception: &on_exception/2,
                              max_retries: 0,
                              on_failure: :drop)
         Process.sleep(1_000)
@@ -688,7 +670,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   defp always_keep(_message, _reason), do: :keep
 
-  defp exception_hook(message, reason) do
+  defp on_exception(message, reason) do
     from = message.metadata["from"] |> :erlang.list_to_pid
     send(from, %{
       "topic" => message.topic,

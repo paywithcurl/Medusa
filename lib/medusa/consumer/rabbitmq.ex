@@ -69,7 +69,7 @@ defmodule Medusa.Consumer.RabbitMQ do
         do_event(message, f, message, state)
       else
         {:error, reason} ->
-          opts.exception_hook.(message, reason)
+          Medusa.Logger.error(message, reason: reason, belongs: "consumption")
           {:error, reason}
       end
     end)
@@ -93,25 +93,31 @@ defmodule Medusa.Consumer.RabbitMQ do
                              belongs: "consumption")
           ack_message(original_message)
         :error ->
-          opts.exception_hook.(message_to_send, "error processing message")
+          Medusa.Logger.error(message,
+                              reason: "error processing message",
+                              belongs: "consumption")
           retry_event(original_message, state)
         {:error, reason} ->
-          opts.exception_hook.(message_to_send, inspect(reason))
+          Medusa.Logger.error(message,
+                              reason: inspect(reason),
+                              belongs: "consumption")
           retry_event(original_message, state)
         error ->
-          opts.exception_hook.(message_to_send, inspect(error))
+          Medusa.Logger.error(message,
+                              reason: inspect(error),
+                              belongs: "consumption")
           drop_message(original_message)
       end
     rescue
       error ->
-        opts.exception_hook.(message_to_send, stack_error(error))
+        opts.on_exception.(message_to_send, stack_error(error))
         retry_event(original_message, state)
     catch
       error ->
-        opts.exception_hook.(message_to_send, stack_error(error))
+        opts.on_exception.(message_to_send, stack_error(error))
         retry_event(original_message, state)
       error, _other_error ->
-        opts.exception_hook.(message_to_send, stack_error(error))
+        opts.on_exception.(message_to_send, stack_error(error))
         retry_event(original_message, state)
     end
   end
@@ -124,36 +130,40 @@ defmodule Medusa.Consumer.RabbitMQ do
           new_message = update_in(new_message.metadata["message_info"].processing_time, &(&1 + timer))
           do_event(new_message, tail, original_message, state)
         :error ->
-          opts.exception_hook.(message, "error processing message")
+          Medusa.Logger.error(message,
+                              reason: "error processing message",
+                              belongs: "consumption")
           retry_event(original_message, state)
         {:error, reason} ->
-          opts.exception_hook.(message, inspect(reason))
+          Medusa.Logger.error(message,
+                              reason: inspect(reason),
+                              belongs: "consumption")
           retry_event(original_message, state)
         error ->
-          opts.exception_hook.(message, inspect(error))
+          Medusa.Logger.error(message,
+                              reason: inspect(error),
+                              belongs: "consumption")
           failure = %Failure{message: original_message, reason: error}
           drop_or_requeue_message(failure, state)
       end
     rescue
       error ->
-        opts.exception_hook(message, stack_error(error))
+        opts.on_exception(message, stack_error(error))
         retry_event(original_message, state)
     catch
       error ->
-        opts.exception_hook(message, stack_error(error))
+        opts.on_exception(message, stack_error(error))
         retry_event(original_message, state)
       error, _other_error ->
-        opts.exception_hook(message, stack_error(error))
+        opts.on_exception(message, stack_error(error))
         retry_event(original_message, state)
     end
   end
 
   defp retry_event(
       %Message{metadata: _metadata} = message,
-      %State{opts: %{
-        max_retries: max_retries,
-        exception_hook: exception_hook}} = state
-  ) do
+      %State{opts: %{max_retries: max_retries}} = state)
+  do
     new_message = update_in(message.metadata["message_info"].retry, &(&1 + 1))
     retried = new_message.metadata["message_info"].retry
     if retried <= max_retries do
@@ -165,7 +175,9 @@ defmodule Medusa.Consumer.RabbitMQ do
         |> :timer.seconds()
       Process.send_after(self(), {:retry, new_message}, time)
     else
-      exception_hook.(message, "error processing message")
+      Medusa.Logger.error(message,
+                          reason: "error processing message",
+                          belongs: "consumption")
       failure = %Failure{message: new_message, reason: "reach max_retries"}
       drop_or_requeue_message(failure, state)
     end
@@ -199,8 +211,7 @@ defmodule Medusa.Consumer.RabbitMQ do
       reason: reason
     },
     %{opts: %{
-      on_failure: callback,
-      exception_hook: exception_hook
+      on_failure: callback
     }}) when is_function(callback, 2)
   do
     case callback.(message, reason) do
@@ -209,7 +220,9 @@ defmodule Medusa.Consumer.RabbitMQ do
       :keep ->
         requeue_message(message)
       _error ->
-        exception_hook.(message, "expect on_failure function to return [:drop, :keep]")
+        Medusa.Logger.error(message,
+                            reason: "expect on_failure function to return [:drop, :keep]",
+                            belongs: "consumption")
         requeue_message(message)
     end
     drop_message(message)
@@ -218,7 +231,9 @@ defmodule Medusa.Consumer.RabbitMQ do
   defp drop_or_requeue_message(
     %Failure{message: %Message{} = message}, %{opts: opts} = state)
   do
-    opts.exception_hook.(message, "expect [:drop, :keep, fun/2] in on_failure")
+    Medusa.Logger.error(message,
+                        reason: "expect [:drop, :keep, fun/2] in on_failure",
+                        belongs: "consumption")
     drop_message(message)
   end
 
@@ -259,15 +274,15 @@ defmodule Medusa.Consumer.RabbitMQ do
     |> Keyword.put_new(:bind_once, false)
     |> Keyword.put_new(:max_retries, 1)
     |> Keyword.put_new(:on_failure, :keep)
-    |> Keyword.put_new(:exception_hook, default_exception_hook())
+    |> Keyword.put_new(:on_exception, opts_on_exception())
     |> Enum.into(%{})
   end
 
-  defp default_exception_hook do
+  defp opts_on_exception do
     medusa_logger = fn message, reason ->
       Medusa.Logger.error(message, reason: reason, belongs: "consumption")
     end
-    Application.get_env(:medusa, :exception_hook, medusa_logger)
+    Application.get_env(:medusa, :on_exception, medusa_logger)
   end
 
   defp stack_error(error) do
