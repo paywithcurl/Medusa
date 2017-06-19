@@ -136,7 +136,7 @@ defmodule Medusa do
   end
 
   defp ensure_config_correct do
-    app_config = Application.get_env(:medusa, Medusa, [])
+    app_config = config() || []
     adapter = Keyword.get(app_config, :adapter)
     cond do
       adapter in @available_adapters ->

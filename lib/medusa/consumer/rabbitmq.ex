@@ -282,7 +282,7 @@ defmodule Medusa.Consumer.RabbitMQ do
     medusa_logger = fn message, reason ->
       Medusa.Logger.error(message, reason: reason, belongs: "consumption")
     end
-    Application.get_env(:medusa, :on_exception, medusa_logger)
+    Medusa.config()[:on_exception] || medusa_logger
   end
 
   defp stack_error(error) do
