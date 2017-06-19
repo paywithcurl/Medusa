@@ -110,14 +110,14 @@ defmodule Medusa.Consumer.RabbitMQ do
       end
     rescue
       error ->
-        opts.on_exception.(message_to_send, stack_error(error))
+        callback_on_exception(opts.on_exception, message_to_send, error)
         retry_event(original_message, state)
     catch
       error ->
-        opts.on_exception.(message_to_send, stack_error(error))
+        callback_on_exception(opts.on_exception, message_to_send, error)
         retry_event(original_message, state)
       error, _other_error ->
-        opts.on_exception.(message_to_send, stack_error(error))
+        callback_on_exception(opts.on_exception, message_to_send, error)
         retry_event(original_message, state)
     end
   end
@@ -148,14 +148,14 @@ defmodule Medusa.Consumer.RabbitMQ do
       end
     rescue
       error ->
-        opts.on_exception(message, stack_error(error))
+        callback_on_exception(opts.on_exception, message, error)
         retry_event(original_message, state)
     catch
       error ->
-        opts.on_exception(message, stack_error(error))
+        callback_on_exception(opts.on_exception, message, error)
         retry_event(original_message, state)
       error, _other_error ->
-        opts.on_exception(message, stack_error(error))
+        callback_on_exception(opts.on_exception, message, error)
         retry_event(original_message, state)
     end
   end
@@ -279,14 +279,23 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp opts_on_exception do
-    medusa_logger = fn message, reason ->
+    medusa_logger = fn message, reason, stacktrace ->
+      reason = stack_error(reason)
       Medusa.Logger.error(message, reason: reason, belongs: "consumption")
     end
-    Medusa.config()[:on_exception] || medusa_logger
+    with on_exception when is_function(on_exception, 3) <- Medusa.config()[:on_exception] do
+      Logger.warn("on_exception must be function with arity 3. fallback to default")
+      on_exception
+    else
+      _ -> medusa_logger
+    end
+  end
+
+  defp callback_on_exception(fun, message, error) do
+    fun.(message, error, System.stacktrace)
   end
 
   defp stack_error(error) do
-    stack = :erlang.get_stacktrace()
-    Exception.format(:error, [error | stack])
+    Exception.format(:error, [error | System.stacktrace()])
   end
 end

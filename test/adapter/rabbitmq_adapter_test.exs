@@ -635,7 +635,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
         :ok = Medusa.consume(topic,
                              &message_to_test/1,
                              queue_name: UUID.uuid4(),
-                             on_exception: &on_exception/2,
+                             on_exception: &on_exception/3,
                              max_retries: 0,
                              on_failure: :drop)
         Process.sleep(1_000)
@@ -650,7 +650,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
         :ok = Medusa.consume(topic,
                              &message_to_test/1,
                              queue_name: UUID.uuid4(),
-                             on_exception: &on_exception/2,
+                             on_exception: &on_exception/3,
                              max_retries: 0,
                              on_failure: :drop)
         Process.sleep(1_000)
@@ -670,7 +670,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   defp always_keep(_message, _reason), do: :keep
 
-  defp on_exception(message, reason) do
+  defp on_exception(message, reason, _stacktrace) do
     from = message.metadata["from"] |> :erlang.list_to_pid
     send(from, %{
       "topic" => message.topic,
