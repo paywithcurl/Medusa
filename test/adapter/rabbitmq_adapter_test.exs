@@ -585,6 +585,7 @@ defmodule Medusa.Adapter.RabbitMQTest do
         publish_test_message(topic, body, metadata)
       end) |> decode_logger_message
     end
+  end
 
     test "consume success" do
       topic = UUID.uuid4()
@@ -627,44 +628,53 @@ defmodule Medusa.Adapter.RabbitMQTest do
       }] = messages
     end
 
-    test "consume failed" do
+  describe "exception hook" do
+    test "callback return error" do
       topic = UUID.uuid4()
       id = UUID.uuid4()
-      request_id = UUID.uuid4()
-      origin = UUID.uuid4()
-      body = UUID.uuid4()
       messages = capture_log(fn ->
         :ok = Medusa.consume(topic,
                              &always_error/1,
                              queue_name: UUID.uuid4(),
                              max_retries: 0,
+                             exception_hook: &exception_hook/2,
+                             on_failure: :drop)
+         Process.sleep(1_000)
+         metadata = %{"id" => id}
+         publish_test_message(topic, %{}, metadata)
+       refute_receive %Message{topic: ^topic}, 1_000
+      end)
+      assert_receive %{"error" => "error processing message", "id" => ^id}
+    end
+
+    test "callback raise exception" do
+      topic = UUID.uuid4()
+      capture_log(fn ->
+        :ok = Medusa.consume(topic,
+                             &message_to_test/1,
+                             queue_name: UUID.uuid4(),
+                             exception_hook: &exception_hook/2,
+                             max_retries: 0,
                              on_failure: :drop)
         Process.sleep(1_000)
-        metadata = %{
-          "id" => id,
-          "request_id" => request_id,
-          "origin" => origin
-        }
-        publish_test_message(topic, body, metadata)
-        refute_receive %Message{body: ^body, topic: ^topic}, 1_000
-      end) |> decode_logger_message
+        publish_test_message(topic, %{}, %{"times" => 1, raise: true})
+      end)
+      assert_receive %{"error" => _, "topic" => ^topic}
+    end
 
-      [message, _] = Enum.filter(messages, & &1["routing_key"]) # only consume message
-      assert %{
-        "belongs" => "consumption",
-        "level" => "error",
-        "message_id" => ^id,
-        "origin" => ^origin,
-        "rabbitmq_consumer_tag" => _,
-        "rabbitmq_exchange" => "medusa",
-        "rabbitmq_host" => _,
-        "rabbitmq_port" => _,
-        "reason" => "error processing message",
-        "request_id" => ^request_id,
-        "routing_key" => ^topic,
-        "timestamp" => _,
-        "topic" => ^topic
-      } = message
+    test "callback throw exception" do
+      topic = UUID.uuid4()
+      capture_log(fn ->
+        :ok = Medusa.consume(topic,
+                             &message_to_test/1,
+                             queue_name: UUID.uuid4(),
+                             exception_hook: &exception_hook/2,
+                             max_retries: 0,
+                             on_failure: :drop)
+        Process.sleep(1_000)
+        publish_test_message(topic, %{}, %{"times" => 1, throw: true})
+      end)
+      assert_receive %{"error" => _, "topic" => ^topic}
     end
   end
 
@@ -678,6 +688,15 @@ defmodule Medusa.Adapter.RabbitMQTest do
 
   defp always_keep(_message, _reason), do: :keep
 
+  defp exception_hook(message, reason) do
+    from = message.metadata["from"] |> :erlang.list_to_pid
+    send(from, %{
+      "topic" => message.topic,
+      "error" => reason,
+      "id" => message.metadata["id"]
+    })
+  end
+
   defp invalid_config(host) do
     [adapter: Medusa.Adapter.RabbitMQ,
      RabbitMQ: %{
@@ -685,13 +704,13 @@ defmodule Medusa.Adapter.RabbitMQTest do
          protocol: "http",
          port: 15672,
        ],
-      connection: [
-        host: host,
-        username: "donald",
-        password: "boss",
-        virtual_host: "/"
-      ]
-    }
-  ]
+       connection: [
+         host: host,
+         username: "donald",
+         password: "boss",
+         virtual_host: "/"
+       ]
+     }
+    ]
   end
 end
