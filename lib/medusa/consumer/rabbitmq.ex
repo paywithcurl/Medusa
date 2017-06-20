@@ -64,7 +64,8 @@ defmodule Medusa.Consumer.RabbitMQ do
       with %AMQP.Channel{} <- message_info.channel,
            tag when is_number(tag) <- message_info.delivery_tag,
            validators = opts.message_validators,
-           :ok <- Medusa.validate_message(validators, message) do
+           :ok <- Medusa.validate_message(validators, message)
+      do
         do_event(message, f, message, state)
       else
         {:error, reason} ->
@@ -80,9 +81,9 @@ defmodule Medusa.Consumer.RabbitMQ do
     %{message | metadata: new_metadata}
   end
 
-  defp do_event(%Message{} = message, [callback], original_message, state) do
+  defp do_event(%Message{} = message, [callback], original_message, %{opts: opts} = state) do
+    message_to_send = scrub_message(message)
     try do
-      message_to_send = scrub_message(message)
       {timer, result} = :timer.tc(fn -> callback.(message_to_send) end)
       case result do
         :ok ->
@@ -109,31 +110,19 @@ defmodule Medusa.Consumer.RabbitMQ do
       end
     rescue
       error ->
-        Exception.format(:error, :erlang.get_stacktrace())
-        |> Logger.error
-        Medusa.Logger.error(message,
-                            reason: inspect(error),
-                            belongs: "consumption")
+        callback_on_exception(opts.on_exception, message_to_send, error)
         retry_event(original_message, state)
     catch
       error ->
-        Exception.format(:error, :erlang.get_stacktrace())
-        |> Logger.error
-        Medusa.Logger.error(message,
-                            reason: inspect(error),
-                            belongs: "consumption")
+        callback_on_exception(opts.on_exception, message_to_send, error)
         retry_event(original_message, state)
       error, _other_error ->
-        Exception.format(:error, :erlang.get_stacktrace())
-        |> Logger.error
-        Medusa.Logger.error(message,
-                            reason: inspect(error),
-                            belongs: "consumption")
+        callback_on_exception(opts.on_exception, message_to_send, error)
         retry_event(original_message, state)
     end
   end
 
-  defp do_event(%Message{} = message, [callback|tail], original_message, state) do
+  defp do_event(%Message{} = message, [callback|tail], original_message, %{opts: opts} = state) do
     try do
       {timer, result} = :timer.tc(fn -> callback.(message) end)
       case result do
@@ -159,33 +148,22 @@ defmodule Medusa.Consumer.RabbitMQ do
       end
     rescue
       error ->
-        Exception.format(:error, :erlang.get_stacktrace())
-        |> Logger.error
-        Medusa.Logger.error(message,
-                            reason: inspect(error),
-                            belongs: "consumption")
+        callback_on_exception(opts.on_exception, message, error)
         retry_event(original_message, state)
     catch
       error ->
-        Exception.format(:error, :erlang.get_stacktrace())
-        |> Logger.error
-        Medusa.Logger.error(message,
-                            reason: inspect(error),
-                            belongs: "consumption")
+        callback_on_exception(opts.on_exception, message, error)
         retry_event(original_message, state)
       error, _other_error ->
-        Exception.format(:error, :erlang.get_stacktrace())
-        |> Logger.error
-        Medusa.Logger.error(message,
-                            reason: inspect(error),
-                            belongs: "consumption")
+        callback_on_exception(opts.on_exception, message, error)
         retry_event(original_message, state)
     end
   end
 
   defp retry_event(
       %Message{metadata: _metadata} = message,
-      %State{opts: %{max_retries: max_retries}} = state) do
+      %State{opts: %{max_retries: max_retries}} = state)
+  do
     new_message = update_in(message.metadata["message_info"].retry, &(&1 + 1))
     retried = new_message.metadata["message_info"].retry
     if retried <= max_retries do
@@ -214,20 +192,28 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp drop_or_requeue_message(
-      %Failure{message: %Message{} = message},
-      %{opts: %{on_failure: :drop}}) do
+    %Failure{message: %Message{} = message},
+    %{opts: %{on_failure: :drop}})
+  do
     drop_message(message)
   end
 
   defp drop_or_requeue_message(
-      %Failure{message: %Message{} = message},
-      %{opts: %{on_failure: :keep}}) do
+    %Failure{message: %Message{} = message},
+    %{opts: %{on_failure: :keep}})
+  do
     requeue_message(message)
   end
 
   defp drop_or_requeue_message(
-      %Failure{message: %Message{} = message, reason: reason},
-      %{opts: %{on_failure: callback}}) when is_function(callback, 2) do
+    %Failure{
+      message: %Message{} = message,
+      reason: reason
+    },
+    %{opts: %{
+      on_failure: callback
+    }}) when is_function(callback, 2)
+  do
     case callback.(message, reason) do
       :drop ->
         drop_message(message)
@@ -243,9 +229,10 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp drop_or_requeue_message(
-      %Failure{message: %Message{} = message}, _state) do
+    %Failure{message: %Message{} = message}, %{opts: opts} = state)
+  do
     Medusa.Logger.error(message,
-                        reason: "expect [:drop, :keep, fun/1] in on_failure",
+                        reason: "expect [:drop, :keep, fun/2] in on_failure",
                         belongs: "consumption")
     drop_message(message)
   end
@@ -282,11 +269,48 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp add_default_options(opts) do
-    [message_validators: [],
-     bind_once: false,
-     max_retries: 1,
-     on_failure: :keep]
-    |> Keyword.merge(opts)
+    opts
+    |> Keyword.put_new(:message_validators, [])
+    |> Keyword.put_new(:bind_once, false)
+    |> Keyword.put_new(:max_retries, 1)
+    |> Keyword.put_new(:on_failure, :keep)
+    |> Keyword.put_new(:on_exception, opts_on_exception())
     |> Enum.into(%{})
+  end
+
+  defp opts_on_exception do
+    medusa_logger = fn message, reason, stacktrace ->
+      reason = stack_error(reason)
+      Medusa.Logger.error(message, reason: reason, belongs: "consumption")
+    end
+    with on_exception when is_function(on_exception, 3) <- Medusa.config()[:on_exception] do
+      Logger.warn("on_exception must be function with arity 3. fallback to default")
+      on_exception
+    else
+      _ -> medusa_logger
+    end
+  end
+
+  defp callback_on_exception(fun, message, error) do
+    reason =
+      case Exception.exception?(error) do
+        true -> error
+        false -> %RuntimeError{message: error}
+      end
+    try do
+      fun.(message, reason, System.stacktrace)
+    rescue
+      error ->
+        Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
+    catch
+      error ->
+        Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
+      error, _other_error ->
+        Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
+    end
+  end
+
+  defp stack_error(error) do
+    Exception.format(:error, [error | System.stacktrace()])
   end
 end
