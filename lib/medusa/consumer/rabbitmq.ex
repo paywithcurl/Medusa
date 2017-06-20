@@ -284,10 +284,10 @@ defmodule Medusa.Consumer.RabbitMQ do
       Medusa.Logger.error(message, reason: reason, belongs: "consumption")
     end
     with on_exception when is_function(on_exception, 3) <- Medusa.config()[:on_exception] do
-      Logger.warn("on_exception must be function with arity 3. fallback to default")
       on_exception
     else
-      _ -> medusa_logger
+      _ ->
+        medusa_logger
     end
   end
 
