@@ -106,6 +106,7 @@ defmodule Medusa.Adapter.RabbitMQ do
         Medusa.Logger.error(message,
                             reason: "malformed message",
                             belongs: "publishing")
+        {:reply, {:error, "malformed message"}, state}
       {{:error, reason}, new_state} ->
         Medusa.Logger.error(message,
                             reason: inspect(reason),
