@@ -11,7 +11,7 @@ defmodule Medusa.ConsumerSupervisor do
       worker(consumer_module(), [], restart: :transient)
     ]
 
-    supervise(children, strategy: :simple_one_for_one)
+    supervise(children, strategy: :simple_one_for_one, max_restarts: 100, max_seconds: 5)
   end
 
   def start_child(f, to_link, opts \\ []) do

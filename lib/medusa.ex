@@ -33,7 +33,11 @@ defmodule Medusa do
 
   def start(_type, _args) do
     ensure_config_correct()
-    {:ok, supervisor} = Supervisor.start_link([], [strategy: :one_for_one, name: Medusa.Supervisor])
+    {:ok, supervisor} = Supervisor.start_link([],
+                                              strategy: :one_for_one,
+                                              max_restarts: 100,
+                                              max_seconds: 5,
+                                              name: Medusa.Supervisor)
 
     # MedusaConfig needs to be started before child_adapter is called
     {:ok, _} = Supervisor.start_child(supervisor, config_worker())
