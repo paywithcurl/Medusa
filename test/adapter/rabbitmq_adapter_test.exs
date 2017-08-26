@@ -126,19 +126,17 @@ defmodule Medusa.Adapter.RabbitMQTest do
     end
 
     test "connectivity to host timing out with alive?" do
-      config = Application.get_env(:medusa, Medusa)
-      # TEST-NET ip from RFC 5737, shouldn't be routable
-      Application.put_env(:medusa, Medusa, invalid_config "192.0.2.0")
+      put_rabbitmq_adapter_config(invalid_config "192.0.2.0")
+      :timer.sleep 1_000
       refute Medusa.alive?()
-      Application.put_env(:medusa, Medusa, config)
+      put_rabbitmq_adapter_config()
     end
 
     test "connectivity to invalid host with alive?" do
-      config = Application.get_env(:medusa, Medusa)
-      # Invalid TLD from RFC 2606
-      Application.put_env(:medusa, Medusa, invalid_config "rabbitmq.invalid")
+      put_rabbitmq_adapter_config(invalid_config "rabbitmq.invalid")
+      :timer.sleep 1_000
       refute Medusa.alive?()
-      Application.put_env(:medusa, Medusa, config)
+      put_rabbitmq_adapter_config()
     end
   end
 

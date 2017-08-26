@@ -45,7 +45,13 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def alive? do
-    Connection.call(__MODULE__, {:alive})
+    try do
+      Connection.call(__MODULE__, {:alive})
+    rescue
+      _ -> false
+    catch
+      _, _ -> false
+    end
   end
 
   def init([]) do
@@ -116,24 +122,16 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   def handle_call({:alive}, _from, state) do
-    # The vhost needs to be url encoded in the path as it can contain /
-    # and it needs to be separated from the path itself.
-    # The default path is /
-    # See https://lists.rabbitmq.com/pipermail/rabbitmq-discuss/2012-March/019161.html
-    vhost = URI.encode_www_form(connection_opts()[:virtual_host])
-    protocol = admin_opts()[:protocol]
-    port = admin_opts()[:port]
-    username = connection_opts()[:username]
-    password = connection_opts()[:password]
-    host = connection_opts()[:host]
-    url = "#{protocol}://#{username}:#{password}@#{host}:#{port}/api/aliveness-test/#{vhost}"
-
     try do
-      alive = case HTTPoison.get(url, %{}, [timeout: 1_000]) do
-		{:ok, %{status_code: 200, body: "{\"status\":\"ok\"}"}} -> true
-		_ -> false
-	      end
-      {:reply, alive, state}
+      with false <- is_nil(state.connection),
+           true  <- Process.alive?(state.connection.pid),
+           false <- is_nil(state.channel),
+           true  <- Process.alive?(state.channel.pid)
+      do
+        {:reply, true , state}
+      else
+        _ -> {:reply, false, state}
+      end
     rescue
       _ -> {:reply, false, state}
     catch

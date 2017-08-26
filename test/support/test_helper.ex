@@ -22,7 +22,6 @@ defmodule Medusa.TestHelper do
   end
 
   def put_rabbitmq_adapter_config do
-    import Supervisor.Spec, warn: false
     opts = [
       adapter: Medusa.Adapter.RabbitMQ,
       group: "test-rabbitmq",
@@ -42,6 +41,10 @@ defmodule Medusa.TestHelper do
         virtual_host: System.get_env("RABBITMQ_VIRTUAL_HOST") || "/",
         heartbeat: 10,
       ]}]
+    put_rabbitmq_adapter_config(opts)
+  end
+  def put_rabbitmq_adapter_config(opts) do
+    import Supervisor.Spec, warn: false
     Application.put_env(:medusa, Medusa, opts, persistent: true)
     restart_app()
     opts
