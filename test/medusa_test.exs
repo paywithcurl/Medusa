@@ -63,18 +63,10 @@ defmodule MedusaTest do
     test "Don't publish when validator rejects message" do
       id = UUID.uuid4()
       assert [%{
-        "belongs" => "publishing",
-        "level" => "error",
         "message_id" => ^id,
-        "origin" => nil,
-        "rabbitmq_consumer_tag" => nil,
-        "rabbitmq_exchange" => nil,
-        "rabbitmq_host" => _,
-        "rabbitmq_port" => _,
         "reason" => "publish failed: failed",
         "request_id" => nil,
         "routing_key" => nil,
-        "timestamp" => _,
         "topic" => "validator.rejected"
       }] = capture_log(fn ->
         validator = fn _ -> {:error, "failed"} end
@@ -133,18 +125,11 @@ defmodule MedusaTest do
     test "Publish with error extra validator in the middle" do
       id = UUID.uuid4()
       assert [%{
-        "belongs" => "publishing",
-        "level" => "error",
         "message_id" => ^id,
         "origin" => nil,
-        "rabbitmq_consumer_tag" => nil,
-        "rabbitmq_exchange" => nil,
-        "rabbitmq_host" => _,
-        "rabbitmq_port" => _,
         "reason" => "publish failed: id not matched",
         "request_id" => nil,
         "routing_key" => nil,
-        "timestamp" => _,
         "topic" => "validator.accepted"
       }] = capture_log(fn ->
         MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
@@ -158,18 +143,11 @@ defmodule MedusaTest do
     test "Publish with error extra validator in the end" do
       id = UUID.uuid4()
       assert [%{
-        "belongs" => "publishing",
-        "level" => "error",
         "message_id" => ^id,
         "origin" => nil,
-        "rabbitmq_consumer_tag" => nil,
-        "rabbitmq_exchange" => nil,
-        "rabbitmq_host" => _,
-        "rabbitmq_port" => _,
         "reason" => "publish failed: id not matched",
         "request_id" => nil,
         "routing_key" => nil,
-        "timestamp" => _,
         "topic" => "validator.accepted"
       }] = capture_log(fn ->
         MedusaConfig.set_message_validator(:medusa_config, &ensures_id_present/1)
@@ -183,18 +161,11 @@ defmodule MedusaTest do
     test "Publish with error extra validator in the global" do
       id = UUID.uuid4()
       assert [%{
-        "belongs" => "publishing",
-        "level" => "error",
         "message_id" => ^id,
         "origin" => nil,
-        "rabbitmq_consumer_tag" => nil,
-        "rabbitmq_exchange" => nil,
-        "rabbitmq_host" => _,
-        "rabbitmq_port" => _,
         "reason" => "publish failed: id not matched",
         "request_id" => nil,
         "routing_key" => nil,
-        "timestamp" => _,
         "topic" => "validator.accepted"
       }] = capture_log(fn ->
         MedusaConfig.set_message_validator(:medusa_config, &ensures_id_1234/1)
