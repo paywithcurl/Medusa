@@ -7,27 +7,44 @@ defmodule Medusa.Logger do
     |> info(opts)
   end
 
-  def info(
+  def info(%{"metadata" => metadata, "topic" => topic}, opts) do
+    info(%{metadata: metadata, topic: topic}, opts)
+  end
+
+  def info(message, opts) do
+    belongs = opts |> Keyword.fetch!(:belongs) |> to_string
+    message
+    |> base_message(belongs)
+    |> Map.merge(%{processing_time: opts[:processing_time]})
+    |> format_log_message
+    |> Logger.info
+  end
+
+  def debug(message, opts) when is_binary(message) do
+    message
+    |> Poison.decode!
+    |> debug(opts)
+  end
+
+  def debug(
       %{"body" => body,
         "metadata" => metadata,
         "topic" => topic},
       opts) do
-    info(%{body: body, metadata: metadata, topic: topic}, opts)
+    debug(%{body: body, metadata: metadata, topic: topic}, opts)
   end
 
-  def info(
+  def debug(
       %{body: body,
         metadata: _,
         topic: _} = message,
       opts) do
     belongs = opts |> Keyword.fetch!(:belongs) |> to_string
     message
-    |> base_message(belongs)
-    |> Map.merge(%{level: "info",
-                   body: body,
-                   processing_time: opts[:processing_time]})
+    |> base_message_debug(belongs)
+    |> Map.merge(%{body: body, processing_time: opts[:processing_time]})
     |> format_log_message
-    |> Logger.info
+    |> Logger.debug
   end
 
   def error(message, opts) when is_binary(message) do
@@ -49,12 +66,28 @@ defmodule Medusa.Logger do
     reason = opts |> Keyword.fetch!(:reason)
     message
     |> base_message(belongs)
-    |> Map.merge(%{level: "error", reason: reason})
+    |> Map.merge(%{reason: reason})
     |> format_log_message
     |> Logger.error
   end
 
   defp base_message(%{metadata: metadata, topic: topic}, belongs) do
+    message_info = metadata["message_info"] || %Medusa.Message.Info{}
+    rabbit_conf = Application.get_env(:medusa, Medusa)[:RabbitMQ][:connection]
+    %{
+      topic: topic,
+      routing_key: message_info.routing_key,
+      message_id: message_info.message_id || metadata["id"],
+      request_id: metadata["request_id"],
+      origin: metadata["origin"],
+    }
+  end
+
+  defp base_message(%{"metadata" => metadata, "topic" => topic}, belongs) do
+    base_message(%{metadata: metadata, topic: topic}, belongs)
+  end
+
+  defp base_message_debug(%{metadata: metadata, topic: topic}, belongs) do
     message_info = metadata["message_info"] || %Medusa.Message.Info{}
     rabbit_conf = Application.get_env(:medusa, Medusa)[:RabbitMQ][:connection]
     %{
@@ -72,7 +105,7 @@ defmodule Medusa.Logger do
     }
   end
 
-  defp base_message(%{"metadata" => metadata, "topic" => topic}, belongs) do
+  defp base_message_debug(%{"metadata" => metadata, "topic" => topic}, belongs) do
     base_message(%{metadata: metadata, topic: topic}, belongs)
   end
 

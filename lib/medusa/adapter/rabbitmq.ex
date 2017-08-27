@@ -102,7 +102,7 @@ defmodule Medusa.Adapter.RabbitMQ do
 
   def handle_call({:publish, %Message{} = message}, _from, state) do
     topic = message.topic
-    Logger.debug("#{__MODULE__}: publish #{inspect message}")
+    Medusa.Logger.debug(message, belongs: "publishing")
     with {:ok, message_bin} <- Poison.encode(message),
          {:ok, new_state} <- do_publish(topic, message_bin, 0, state) do
       Medusa.Logger.info(message, belongs: "publishing")
