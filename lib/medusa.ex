@@ -182,12 +182,12 @@ defmodule Medusa do
         do_validate_message(tail, message)
       {:error, reason} ->
         {:error, reason}
-      reason ->
+      _reason ->
         {:error, "invalid return from validator, expected [:ok, {:error, reason}]"}
     end
   end
 
-  defp do_validate_message(_, %Message{} = message) do
+  defp do_validate_message(_, %Message{}) do
     {:error, "validator is not a function"}
   end
 

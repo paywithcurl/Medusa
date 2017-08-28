@@ -80,7 +80,8 @@ defmodule Medusa.Adapter.PG2 do
   # get all nodes in medusa
   defp get_all_members do
     :pg2.which_groups
-    |> Enum.filter_map(&elem(&1, 0) == :medusa, &:pg2.get_members/1)
+    |> Enum.filter(&elem(&1, 0) == :medusa)
+    |> Enum.map(&:pg2.get_members/1)
   end
 
   # get all medusa groups and random one member from each group

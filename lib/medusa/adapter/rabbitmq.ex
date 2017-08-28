@@ -229,11 +229,6 @@ defmodule Medusa.Adapter.RabbitMQ do
     :ok
   end
 
-  defp admin_opts do
-    Medusa.config
-    |> get_in([:RabbitMQ, :admin])
-  end
-
   defp connection_opts do
     Medusa.config
     |> get_in([:RabbitMQ, :connection])
