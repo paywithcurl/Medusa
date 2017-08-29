@@ -71,9 +71,8 @@ defmodule Medusa.Logger do
     |> Logger.error
   end
 
-  defp base_message(%{metadata: metadata, topic: topic}, belongs) do
+  defp base_message(%{metadata: metadata, topic: topic}, _belongs) do
     message_info = metadata["message_info"] || %Medusa.Message.Info{}
-    rabbit_conf = Application.get_env(:medusa, Medusa)[:RabbitMQ][:connection]
     %{
       topic: topic,
       routing_key: message_info.routing_key,
