@@ -229,7 +229,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp drop_or_requeue_message(
-    %Failure{message: %Message{} = message}, _state)
+    %Failure{message: %Message{} = message}, %{opts: opts} = state)
   do
     Medusa.Logger.error(message,
                         reason: "expect [:drop, :keep, fun/2] in on_failure",
@@ -279,7 +279,7 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp opts_on_exception do
-    medusa_logger = fn message, reason, _stacktrace ->
+    medusa_logger = fn message, reason, stacktrace ->
       reason = stack_error(reason)
       Medusa.Logger.error(message, reason: reason, belongs: "consumption")
     end
@@ -292,14 +292,13 @@ defmodule Medusa.Consumer.RabbitMQ do
   end
 
   defp callback_on_exception(fun, message, error) do
-    stacktrace = System.stacktrace()
     reason =
       case Exception.exception?(error) do
         true -> error
         false -> %RuntimeError{message: error}
       end
     try do
-      fun.(message, reason, stacktrace)
+      fun.(message, reason, System.stacktrace)
     rescue
       error ->
         Medusa.Logger.error(message, reason: stack_error(error), belongs: "consumption")
