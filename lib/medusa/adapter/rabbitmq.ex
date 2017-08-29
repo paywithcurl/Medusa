@@ -220,19 +220,18 @@ defmodule Medusa.Adapter.RabbitMQ do
   end
 
   defp ensure_channel_closed(%AMQP.Channel{} = chan) do
-    Process.sleep(100)  # wait channel process die
     if Process.alive?(chan.pid) do
-      try do
-        AMQP.Channel.close(chan)
-      catch
-        _exit, _reason ->
-          :ok
-      end
+      AMQP.Channel.close(chan)
     end
   end
 
   defp ensure_channel_closed(_) do
     :ok
+  end
+
+  defp admin_opts do
+    Medusa.config
+    |> get_in([:RabbitMQ, :admin])
   end
 
   defp connection_opts do
