@@ -15,7 +15,7 @@ defmodule Medusa.Logger do
     belongs = opts |> Keyword.fetch!(:belongs) |> to_string
     message
     |> base_message(belongs)
-    |> Map.merge(%{processing_time: opts[:processing_time]})
+    |> Map.merge(%{level: "info", processing_time: opts[:processing_time]})
     |> format_log_message
     |> Logger.info
   end
@@ -42,7 +42,7 @@ defmodule Medusa.Logger do
     belongs = opts |> Keyword.fetch!(:belongs) |> to_string
     message
     |> base_message_debug(belongs)
-    |> Map.merge(%{body: body, processing_time: opts[:processing_time]})
+    |> Map.merge(%{level: "debug", body: body, processing_time: opts[:processing_time]})
     |> format_log_message
     |> Logger.debug
   end
@@ -66,7 +66,7 @@ defmodule Medusa.Logger do
     reason = opts |> Keyword.fetch!(:reason)
     message
     |> base_message(belongs)
-    |> Map.merge(%{reason: reason})
+    |> Map.merge(%{level: "error", reason: reason})
     |> format_log_message
     |> Logger.error
   end
